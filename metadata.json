@@ -1,0 +1,6 @@
+{
+  "name": "초등 학급 제출물 관리기 (Class Submission Tracker)",
+  "description": "초등학교 교사를 위한 학생 명단 관리, 과제/제출물 체크, 구글 시트 연동 및 실시간 동기화 웹앱",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
