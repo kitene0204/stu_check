@@ -55,6 +55,7 @@ export interface SupabaseConfig {
 
 export interface GoogleSheetsConfig {
   spreadsheetUrl?: string;
+  webhookUrl?: string;
   sheetName?: string;
   autoSyncEnabled: boolean;
   lastExportedAt?: string;

@@ -97,7 +97,24 @@ export const saveSubmissions = (submissions: SubmissionMap): void => {
 export const loadSupabaseConfig = (): SupabaseConfig => {
   try {
     const data = localStorage.getItem(STORAGE_KEYS.SUPABASE_CONFIG);
-    return data ? JSON.parse(data) : { url: '', anonKey: '', isEnabled: false };
+    if (data) {
+      const parsed = JSON.parse(data);
+      if (parsed.url && parsed.anonKey) return parsed;
+    }
+    
+    // Check Vite Environment Variables (e.g. from Vercel deployment)
+    const envUrl = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_SUPABASE_URL || '';
+    const envKey = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_SUPABASE_ANON_KEY || '';
+
+    if (envUrl && envKey) {
+      return {
+        url: envUrl,
+        anonKey: envKey,
+        isEnabled: true,
+      };
+    }
+
+    return { url: '', anonKey: '', isEnabled: false };
   } catch {
     return { url: '', anonKey: '', isEnabled: false };
   }
