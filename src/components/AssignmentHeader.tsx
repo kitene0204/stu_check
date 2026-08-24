@@ -8,7 +8,8 @@ import {
   Users2, 
   Calendar,
   Filter,
-  Sparkles
+  Sparkles,
+  Trash2
 } from 'lucide-react';
 import { Assignment, ViewMode, FilterMode } from '../types';
 
@@ -21,6 +22,7 @@ interface AssignmentHeaderProps {
   onCheckAll: () => void;
   onOpenNoticeModal: () => void;
   onOpenSheetsModal: () => void;
+  onDeleteAssignment?: (id: string, title: string) => void;
   totalStudents: number;
   submittedCount: number;
   missingCount: number;
@@ -36,6 +38,7 @@ export const AssignmentHeader: React.FC<AssignmentHeaderProps> = ({
   onCheckAll,
   onOpenNoticeModal,
   onOpenSheetsModal,
+  onDeleteAssignment,
   totalStudents,
   submittedCount,
   missingCount,
@@ -66,9 +69,25 @@ export const AssignmentHeader: React.FC<AssignmentHeaderProps> = ({
             </span>
           </div>
 
-          <h2 className="text-2xl font-serif-kr font-bold text-[#3D3A35] tracking-tight">
-            {assignment.title}
-          </h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-2xl font-serif-kr font-bold text-[#3D3A35] tracking-tight">
+              {assignment.title}
+            </h2>
+            {onDeleteAssignment && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm(`'${assignment.title}' 과제를 정말 삭제하시겠습니까?`)) {
+                    onDeleteAssignment(assignment.id, assignment.title);
+                  }
+                }}
+                className="p-1.5 text-[#C4BCAD] hover:text-[#C53030] hover:bg-red-50 rounded-xl transition-colors"
+                title="이 과제 삭제"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+          </div>
 
           {assignment.description && (
             <p className="text-xs text-[#5D574F] mt-1 max-w-2xl leading-relaxed">

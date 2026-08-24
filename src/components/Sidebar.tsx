@@ -7,7 +7,8 @@ import {
   Award, 
   Clock, 
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Trash2
 } from 'lucide-react';
 import { Assignment, AssignmentCategory, Student, SubmissionMap } from '../types';
 
@@ -16,6 +17,7 @@ interface SidebarProps {
   activeAssignmentId: string | null;
   onSelectAssignment: (id: string) => void;
   onOpenNewAssignmentModal: () => void;
+  onDeleteAssignment: (id: string, title: string) => void;
   students: Student[];
   submissionsMap: SubmissionMap;
 }
@@ -25,6 +27,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeAssignmentId,
   onSelectAssignment,
   onOpenNewAssignmentModal,
+  onDeleteAssignment,
   students,
   submissionsMap,
 }) => {
@@ -54,6 +57,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
+  const handleDelete = (e: React.MouseEvent, id: string, title: string) => {
+    e.stopPropagation();
+    if (window.confirm(`정말 '${title}' 항목을 삭제하시겠습니까?\n(체크된 제출 기록도 함께 삭제됩니다)`)) {
+      onDeleteAssignment(id, title);
+    }
+  };
+
   return (
     <aside className="w-72 bg-[#F2EDE4] border-r border-[#DCD5C8] p-5 flex flex-col justify-between shrink-0 overflow-y-auto select-none">
       <div>
@@ -64,8 +74,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </h3>
           <button
             onClick={onOpenNewAssignmentModal}
-            className="flex items-center gap-1 px-2.5 py-1 bg-[#A3B18A] text-white hover:bg-[#92A179] rounded-lg text-xs font-semibold shadow-xs transition-colors"
-            title="새 제출물 생성"
+            className="flex items-center gap-1 px-2.5 py-1 bg-[#A3B18A] text-white hover:bg-[#92A179] rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+            title="새 과제/제출물 생성"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>추가</span>
@@ -78,7 +88,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`px-2.5 py-1 text-[11px] font-medium rounded-lg transition-all ${
+              className={`px-2.5 py-1 text-[11px] font-medium rounded-lg transition-all cursor-pointer ${
                 selectedCategory === cat
                   ? 'bg-[#3D3A35] text-white shadow-xs'
                   : 'bg-white/40 text-[#5D574F] hover:bg-white/80'
@@ -106,14 +116,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div
                   key={asg.id}
                   onClick={() => onSelectAssignment(asg.id)}
-                  className={`px-3.5 py-2.5 rounded-xl border transition-all cursor-pointer flex flex-col gap-1 ${
+                  className={`group/item px-3.5 py-2.5 rounded-xl border transition-all cursor-pointer flex flex-col gap-1 relative ${
                     isActive
                       ? 'bg-white shadow-xs border-[#DCD5C8] ring-1 ring-[#A3B18A]/40'
                       : 'bg-transparent border-transparent hover:bg-white/50 text-[#5D574F]'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 overflow-hidden">
+                    <div className="flex items-center gap-2 overflow-hidden flex-1">
                       <div 
                         className={`w-2 h-2 rounded-full shrink-0 ${
                           isAllDone 
@@ -127,9 +137,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         {asg.title}
                       </span>
                     </div>
-                    {isAllDone && (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-[#A3B18A] shrink-0" />
-                    )}
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      {isAllDone && (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-[#A3B18A]" />
+                      )}
+                      
+                      {/* Delete Assignment Button */}
+                      <button
+                        type="button"
+                        onClick={(e) => handleDelete(e, asg.id, asg.title)}
+                        className="p-1 text-[#C4BCAD] hover:text-[#C53030] hover:bg-red-50 rounded-md transition-colors opacity-0 group-hover/item:opacity-100"
+                        title={`'${asg.title}' 과제 삭제`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-between text-[10px] text-[#A89F91] pl-4">

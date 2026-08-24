@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+  <!-- Sage green soft rounded background -->
+  <rect width="100" height="100" rx="28" fill="#9AA882"/>
+  
+  <!-- Graduation Cap / 학사모 White Line Icon -->
+  <g fill="none" stroke="#FFFFFF" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Top Rhombus Cap -->
+    <path d="M50 26 L82 39 L50 52 L18 39 Z" fill="#9AA882" fill-opacity="0.1" />
+    <!-- Cap Rim Underneath -->
+    <path d="M28 44.5 V58 C28 66 72 66 72 58 V44.5" />
+    <!-- Tassel / 수술 -->
+    <path d="M74 42.5 V63" />
+    <circle cx="74" cy="65.5" r="2" fill="#FFFFFF" />
+  </g>
+</svg>

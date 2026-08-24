@@ -44,6 +44,8 @@ export interface ClassRoom {
   classNumber: number;
   academicYear: number;
   teacherName?: string;
+  customTitle?: string;
+  customSubtitle?: string;
 }
 
 export interface SupabaseConfig {

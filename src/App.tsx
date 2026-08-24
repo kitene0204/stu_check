@@ -46,6 +46,7 @@ import { GoogleSheetsModal } from './components/GoogleSheetsModal';
 import { SupabaseModal } from './components/SupabaseModal';
 import { PrintModal } from './components/PrintModal';
 import { StudentDetailModal } from './components/StudentDetailModal';
+import { AppSettingsModal } from './components/AppSettingsModal';
 import { Toast } from './components/Toast';
 
 export default function App() {
@@ -71,6 +72,7 @@ export default function App() {
   const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   
   // Student detail modal
   const [selectedStudentForDetail, setSelectedStudentForDetail] = useState<Student | null>(null);
@@ -142,6 +144,23 @@ export default function App() {
     setAssignments(updated);
     saveAssignments(updated);
     setActiveAssignmentId(newAsg.id);
+  };
+
+  const handleDeleteAssignment = (assignmentId: string, title: string) => {
+    const updated = assignments.filter(a => a.id !== assignmentId);
+    setAssignments(updated);
+    saveAssignments(updated);
+
+    const updatedSubmissions = { ...submissionsMap };
+    delete updatedSubmissions[assignmentId];
+    setSubmissionsMap(updatedSubmissions);
+    saveSubmissions(updatedSubmissions);
+
+    if (activeAssignmentId === assignmentId) {
+      setActiveAssignmentId(updated.length > 0 ? updated[0].id : null);
+    }
+
+    showToast(`🗑️ '${title}' 과제가 삭제되었습니다.`);
   };
 
   // Toggle single student submission status
@@ -280,6 +299,24 @@ export default function App() {
     saveSheetsConfig(cfg);
   };
 
+  const handleRestoreAllData = (restored: { classRoom: ClassRoom; students: Student[]; assignments: Assignment[]; submissionsMap: SubmissionMap }) => {
+    setClassRoom(restored.classRoom);
+    saveClassRoom(restored.classRoom);
+
+    setStudents(restored.students);
+    saveStudents(restored.students);
+
+    setAssignments(restored.assignments);
+    saveAssignments(restored.assignments);
+
+    setSubmissionsMap(restored.submissionsMap);
+    saveSubmissions(restored.submissionsMap);
+
+    if (restored.assignments.length > 0) {
+      setActiveAssignmentId(restored.assignments[0].id);
+    }
+  };
+
   return (
     <div className="h-screen w-screen flex flex-col bg-[#FAF9F6] text-[#5D574F] font-sans overflow-hidden select-none">
       {/* Top Header with Natural Tones */}
@@ -292,6 +329,7 @@ export default function App() {
         onOpenPrintModal={() => setIsPrintModalOpen(true)}
         onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
         onOpenSheetsModal={() => setIsSheetsModalOpen(true)}
+        onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
       />
 
       {/* Main Workspace Layout */}
@@ -302,6 +340,7 @@ export default function App() {
           activeAssignmentId={activeAssignment?.id || null}
           onSelectAssignment={(id) => setActiveAssignmentId(id)}
           onOpenNewAssignmentModal={() => setIsNewAssignmentModalOpen(true)}
+          onDeleteAssignment={handleDeleteAssignment}
           students={students}
           submissionsMap={submissionsMap}
         />
@@ -318,6 +357,7 @@ export default function App() {
             onCheckAll={handleCheckAll}
             onOpenNoticeModal={() => setIsNoticeModalOpen(true)}
             onOpenSheetsModal={() => setIsSheetsModalOpen(true)}
+            onDeleteAssignment={handleDeleteAssignment}
             totalStudents={totalStudents}
             submittedCount={submittedCount}
             missingCount={missingCount}
@@ -437,6 +477,28 @@ export default function App() {
         currentStatus={selectedStudentForDetail ? (currentSubmissions[selectedStudentForDetail.id]?.status || 'pending') : 'pending'}
         currentNote={selectedStudentForDetail ? (currentSubmissions[selectedStudentForDetail.id]?.note || '') : ''}
         onSave={handleSaveStudentDetail}
+        onShowToast={showToast}
+      />
+
+      <AppSettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        classRoom={classRoom}
+        onUpdateClassRoom={handleUpdateClassRoom}
+        supabaseConfig={supabaseConfig}
+        sheetsConfig={sheetsConfig}
+        onOpenSupabaseModal={() => {
+          setIsSettingsModalOpen(false);
+          setIsSupabaseModalOpen(true);
+        }}
+        onOpenSheetsModal={() => {
+          setIsSettingsModalOpen(false);
+          setIsSheetsModalOpen(true);
+        }}
+        students={students}
+        assignments={assignments}
+        submissionsMap={submissionsMap}
+        onRestoreAllData={handleRestoreAllData}
         onShowToast={showToast}
       />
 
