@@ -32,6 +32,7 @@ export interface Assignment {
 export interface SubmissionItem {
   status: SubmissionStatus;
   submittedAt?: string;
+  updatedAt?: string;
   note?: string;
 }
 

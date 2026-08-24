@@ -1,10 +1,10 @@
 import { Student, Assignment, ClassRoom } from '../types';
 
 export const INITIAL_CLASS: ClassRoom = {
-  id: 'class-3-2-2026',
-  schoolName: '새싹초등학교',
-  grade: 3,
-  classNumber: 2,
+  id: 'class-6-1-2026',
+  schoolName: '전주삼천초등학교',
+  grade: 6,
+  classNumber: 1,
   academicYear: 2026,
   teacherName: '김선생님',
 };

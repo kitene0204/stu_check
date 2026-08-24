@@ -13,7 +13,11 @@ import {
   Upload, 
   Sparkles,
   ExternalLink,
-  ShieldCheck
+  ShieldCheck,
+  Smartphone,
+  QrCode,
+  Copy,
+  Info
 } from 'lucide-react';
 import { ClassRoom, SupabaseConfig, GoogleSheetsConfig, Student, Assignment, SubmissionMap } from '../types';
 
@@ -48,7 +52,7 @@ export const AppSettingsModal: React.FC<AppSettingsModalProps> = ({
   onRestoreAllData,
   onShowToast,
 }) => {
-  const [activeTab, setActiveTab] = useState<'title' | 'sync' | 'backup'>('title');
+  const [activeTab, setActiveTab] = useState<'title' | 'mobile' | 'sync' | 'backup'>('title');
 
   // Title form state
   const [useCustomTitle, setUseCustomTitle] = useState(Boolean(classRoom.customTitle));
@@ -64,7 +68,7 @@ export const AppSettingsModal: React.FC<AppSettingsModalProps> = ({
 
   const currentDisplayTitle = useCustomTitle && customTitle.trim()
     ? customTitle.trim()
-    : `${schoolName.trim() || '새싹초등학교'} ${grade || '3'}학년 ${classNumber || '2'}반`;
+    : `${schoolName.trim() || '전주삼천초등학교'} ${grade || '6'}학년 ${classNumber || '1'}반`;
 
   const currentDisplaySubtitle = customSubtitle.trim() || 'STUDENT ASSIGNMENT & SUBMISSION TRACKER';
 
@@ -72,31 +76,61 @@ export const AppSettingsModal: React.FC<AppSettingsModalProps> = ({
     e.preventDefault();
     const updated: ClassRoom = {
       ...classRoom,
-      schoolName: schoolName.trim() || '새싹초등학교',
-      grade: parseInt(grade, 10) || 3,
+      schoolName: schoolName.trim() || '전주삼천초등학교',
+      grade: parseInt(grade, 10) || 6,
       classNumber: parseInt(classNumber, 10) || 1,
-      academicYear: parseInt(academicYear, 10) || 2026,
+      academicYear: parseInt(academicYear, 10) || new Date().getFullYear(),
       teacherName: teacherName.trim() || undefined,
-      customTitle: useCustomTitle ? customTitle.trim() : undefined,
+      customTitle: useCustomTitle && customTitle.trim() ? customTitle.trim() : undefined,
       customSubtitle: customSubtitle.trim() || undefined,
     };
-
     onUpdateClassRoom(updated);
-    onShowToast('✨ 웹앱 제목 및 학급 설정이 성공적으로 저장되었습니다!');
-    onClose();
+    onShowToast('🏫 학급 및 웹앱 제목이 즉시 저장되었습니다.');
   };
 
-  // Export full JSON backup
+  // Generate Mobile QR & Link Payload
+  const getMobileSyncUrl = () => {
+    try {
+      const payload = {
+        classRoom: {
+          ...classRoom,
+          schoolName: schoolName.trim() || '전주삼천초등학교',
+          grade: parseInt(grade, 10) || 6,
+          classNumber: parseInt(classNumber, 10) || 1,
+          customTitle: useCustomTitle && customTitle.trim() ? customTitle.trim() : undefined,
+          customSubtitle: customSubtitle.trim() || undefined,
+          teacherName: teacherName.trim() || undefined,
+        },
+        students,
+        supabaseConfig,
+        sheetsConfig,
+      };
+      const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+      return `${window.location.origin}${window.location.pathname}?syncData=${encoded}`;
+    } catch (e) {
+      return window.location.href;
+    }
+  };
+
+  const mobileSyncUrl = getMobileSyncUrl();
+  const qrCodeImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(mobileSyncUrl)}`;
+
+  const handleCopyMobileLink = () => {
+    navigator.clipboard.writeText(mobileSyncUrl);
+    onShowToast('🔗 스마트폰 즉시 연동 링크가 복사되었습니다! 카톡이나 메신저로 열어보세요.');
+  };
+
+  // Export JSON backup
   const handleExportBackup = () => {
     const backupData = {
-      version: '1.2.0',
+      version: '1.0',
       exportedAt: new Date().toISOString(),
       classRoom: {
         ...classRoom,
         schoolName,
-        grade: parseInt(grade, 10) || classRoom.grade,
-        classNumber: parseInt(classNumber, 10) || classRoom.classNumber,
-        academicYear: parseInt(academicYear, 10) || classRoom.academicYear,
+        grade: parseInt(grade, 10) || 6,
+        classNumber: parseInt(classNumber, 10) || 1,
+        academicYear: parseInt(academicYear, 10) || new Date().getFullYear(),
         teacherName,
         customTitle: useCustomTitle ? customTitle : undefined,
         customSubtitle: customSubtitle || undefined,
@@ -166,7 +200,7 @@ export const AppSettingsModal: React.FC<AppSettingsModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-base">웹앱 및 학급 환경 설정</h3>
-              <p className="text-[11px] text-[#5D574F]">제목 변경, 연동 상태 관리, 데이터 안전 보관</p>
+              <p className="text-[11px] text-[#5D574F]">제목 변경, 스마트폰 연동, 데이터 안전 보관</p>
             </div>
           </div>
           <button
@@ -178,10 +212,10 @@ export const AppSettingsModal: React.FC<AppSettingsModalProps> = ({
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-[#DCD5C8] bg-white px-6 pt-3 gap-2">
+        <div className="flex border-b border-[#DCD5C8] bg-white px-6 pt-3 gap-2 overflow-x-auto">
           <button
             onClick={() => setActiveTab('title')}
-            className={`pb-2.5 px-3 text-xs font-bold transition-all border-b-2 ${
+            className={`pb-2.5 px-3 text-xs font-bold transition-all border-b-2 whitespace-nowrap ${
               activeTab === 'title'
                 ? 'border-[#A3B18A] text-[#3D5A30]'
                 : 'border-transparent text-[#A89F91] hover:text-[#5D574F]'
@@ -190,8 +224,19 @@ export const AppSettingsModal: React.FC<AppSettingsModalProps> = ({
             웹앱 제목 / 학급 정보
           </button>
           <button
+            onClick={() => setActiveTab('mobile')}
+            className={`pb-2.5 px-3 text-xs font-bold transition-all border-b-2 whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === 'mobile'
+                ? 'border-[#A3B18A] text-[#3D5A30]'
+                : 'border-transparent text-[#A89F91] hover:text-[#5D574F]'
+            }`}
+          >
+            <Smartphone className="w-3.5 h-3.5" />
+            <span>스마트폰 즉시 연동 (QR)</span>
+          </button>
+          <button
             onClick={() => setActiveTab('sync')}
-            className={`pb-2.5 px-3 text-xs font-bold transition-all border-b-2 ${
+            className={`pb-2.5 px-3 text-xs font-bold transition-all border-b-2 whitespace-nowrap ${
               activeTab === 'sync'
                 ? 'border-[#A3B18A] text-[#3D5A30]'
                 : 'border-transparent text-[#A89F91] hover:text-[#5D574F]'
@@ -201,13 +246,13 @@ export const AppSettingsModal: React.FC<AppSettingsModalProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('backup')}
-            className={`pb-2.5 px-3 text-xs font-bold transition-all border-b-2 ${
+            className={`pb-2.5 px-3 text-xs font-bold transition-all border-b-2 whitespace-nowrap ${
               activeTab === 'backup'
                 ? 'border-[#A3B18A] text-[#3D5A30]'
                 : 'border-transparent text-[#A89F91] hover:text-[#5D574F]'
             }`}
           >
-            데이터 백업 및 복원
+            데이터 백업/복원
           </button>
         </div>
 
@@ -256,42 +301,45 @@ export const AppSettingsModal: React.FC<AppSettingsModalProps> = ({
                     type="text"
                     value={customTitle}
                     onChange={(e) => setCustomTitle(e.target.value)}
-                    placeholder="예: 우리들의 행복한 3학년 2반 과제방"
+                    placeholder="예: 전주삼천초등학교 6학년 1반"
                     className="w-full px-3 py-2 bg-white border border-[#DCD5C8] rounded-xl text-xs text-[#3D3A35] focus:outline-[#A3B18A]"
                   />
                 </div>
               ) : (
-                <div className="grid grid-cols-3 gap-2.5">
-                  <div className="col-span-3 sm:col-span-1 space-y-1">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div className="space-y-1">
                     <label className="text-xs font-bold text-[#3D3A35]">학교 이름</label>
                     <input
                       type="text"
                       value={schoolName}
                       onChange={(e) => setSchoolName(e.target.value)}
-                      placeholder="새싹초등학교"
+                      placeholder="예: 전주삼천초등학교"
                       className="w-full px-3 py-2 bg-white border border-[#DCD5C8] rounded-xl text-xs text-[#3D3A35] focus:outline-[#A3B18A]"
+                      required
                     />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-[#3D3A35]">학년</label>
                     <input
                       type="number"
-                      min="1"
-                      max="6"
+                      min={1}
+                      max={6}
                       value={grade}
                       onChange={(e) => setGrade(e.target.value)}
                       className="w-full px-3 py-2 bg-white border border-[#DCD5C8] rounded-xl text-xs text-[#3D3A35] focus:outline-[#A3B18A]"
+                      required
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-[#3D3A35]">학급(반)</label>
+                    <label className="text-xs font-bold text-[#3D3A35]">반</label>
                     <input
                       type="number"
-                      min="1"
-                      max="20"
+                      min={1}
+                      max={20}
                       value={classNumber}
                       onChange={(e) => setClassNumber(e.target.value)}
                       className="w-full px-3 py-2 bg-white border border-[#DCD5C8] rounded-xl text-xs text-[#3D3A35] focus:outline-[#A3B18A]"
+                      required
                     />
                   </div>
                 </div>
@@ -334,6 +382,58 @@ export const AppSettingsModal: React.FC<AppSettingsModalProps> = ({
             </form>
           )}
 
+          {activeTab === 'mobile' && (
+            <div className="space-y-4">
+              <div className="p-4 bg-white border border-[#A3B18A]/40 rounded-2xl flex flex-col sm:flex-row items-center gap-5">
+                {/* QR Code */}
+                <div className="p-3 bg-[#FAF9F6] border border-[#DCD5C8] rounded-2xl flex flex-col items-center shrink-0">
+                  <img
+                    src={qrCodeImageUrl}
+                    alt="스마트폰 연동 QR코드"
+                    className="w-44 h-44 rounded-lg object-contain"
+                  />
+                  <span className="text-[10px] font-bold text-[#5D574F] mt-2 flex items-center gap-1">
+                    <QrCode className="w-3 h-3 text-[#2D6A4F]" />
+                    <span>스마트폰 카메라로 스캔</span>
+                  </span>
+                </div>
+
+                {/* Explanation */}
+                <div className="space-y-2.5 text-xs text-[#5D574F] flex-1">
+                  <div className="font-bold text-sm text-[#3D3A35] flex items-center gap-1.5">
+                    <Smartphone className="w-4 h-4 text-[#2D6A4F]" />
+                    <span>1초 만에 스마트폰에 학급 설정 동기화</span>
+                  </div>
+                  <p className="leading-relaxed">
+                    스마트폰 카메라로 위 QR코드를 촬영하거나 아래 연동 링크를 열면, 데스크탑에서 설정하신 <strong>&apos;{currentDisplayTitle}&apos;</strong>, 학생 명단({students.length}명), 연동 정보가 스마트폰에 즉시 동기화됩니다!
+                  </p>
+                  
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={handleCopyMobileLink}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#2D6A4F] text-white hover:bg-[#23533E] rounded-xl font-bold transition-all shadow-xs"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>스마트폰 연동 링크 복사하기</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Why does title reset on new device? */}
+              <div className="p-3.5 bg-[#F2EDE4]/70 border border-[#DCD5C8] rounded-xl text-xs text-[#5D574F] space-y-1">
+                <div className="font-bold text-[#3D3A35] flex items-center gap-1">
+                  <Info className="w-3.5 h-3.5 text-[#BC6C25]" />
+                  <span>스마트폰에서 기본 제목으로 나왔던 이유</span>
+                </div>
+                <p className="leading-relaxed text-[11px]">
+                  웹 브라우저는 기기마다 독립된 로컬 저장소를 사용합니다. 데스크탑에서 변경하신 정보는 스마트폰에 자동으로 넘어가지 않으므로, <strong>위 QR 코드로 1회 열어주시거나</strong> 스마트폰 설정에서 동일하게 학교명을 입력해주시면 됩니다.
+                </p>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'sync' && (
             <div className="space-y-4">
               {/* Google Sheets Hub Card */}
@@ -374,7 +474,7 @@ export const AppSettingsModal: React.FC<AppSettingsModalProps> = ({
                       onClose();
                       onOpenSheetsModal();
                     }}
-                    className="px-3 py-1.5 bg-[#2D6A4F] text-white hover:bg-[#23533E] rounded-xl text-xs font-bold"
+                    className="px-3 py-1.5 bg-[#2D6A4F] text-white hover:bg-[#23533E] rounded-xl text-xs font-bold cursor-pointer"
                   >
                     구글 시트 연동 설정 열기
                   </button>
@@ -419,7 +519,7 @@ export const AppSettingsModal: React.FC<AppSettingsModalProps> = ({
                       onClose();
                       onOpenSupabaseModal();
                     }}
-                    className="px-3 py-1.5 bg-[#A3B18A] text-white hover:bg-[#92A179] rounded-xl text-xs font-bold"
+                    className="px-3 py-1.5 bg-[#A3B18A] text-white hover:bg-[#92A179] rounded-xl text-xs font-bold cursor-pointer"
                   >
                     Supabase 설정 열기
                   </button>
@@ -448,7 +548,7 @@ export const AppSettingsModal: React.FC<AppSettingsModalProps> = ({
 
                 <button
                   onClick={handleExportBackup}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#FAF9F6] hover:bg-[#EAE5D8] border border-[#DCD5C8] rounded-xl text-xs font-bold text-[#3D3A35] transition-colors"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#FAF9F6] hover:bg-[#EAE5D8] border border-[#DCD5C8] rounded-xl text-xs font-bold text-[#3D3A35] transition-colors cursor-pointer"
                 >
                   <Download className="w-4 h-4" />
                   <span>학급 데이터 전체 백업 다운로드 (.json)</span>
@@ -482,7 +582,7 @@ export const AppSettingsModal: React.FC<AppSettingsModalProps> = ({
         <div className="px-6 py-3.5 bg-[#EAE5D8] border-t border-[#DCD5C8] flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-white hover:bg-[#FAF9F6] border border-[#DCD5C8] rounded-xl text-xs font-bold text-[#5D574F]"
+            className="px-4 py-2 bg-white hover:bg-[#FAF9F6] border border-[#DCD5C8] rounded-xl text-xs font-bold text-[#5D574F] cursor-pointer"
           >
             닫기
           </button>

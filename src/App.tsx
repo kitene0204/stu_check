@@ -1,30 +1,11 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import confetti from 'canvas-confetti';
 import { 
-  loadClassRoom, 
-  saveClassRoom, 
-  loadStudents, 
-  saveStudents, 
-  loadAssignments, 
-  saveAssignments, 
-  loadSubmissions, 
-  saveSubmissions,
-  loadSupabaseConfig,
-  saveSupabaseConfig,
-  loadSheetsConfig,
-  saveSheetsConfig,
-} from './services/storageService';
-import { 
+  ClassRoom, 
   Student, 
   Assignment, 
-  ClassRoom, 
-  SupabaseConfig, 
   GoogleSheetsConfig, 
+  SupabaseConfig, 
   ViewMode, 
   FilterMode, 
   SubmissionStatus,
@@ -49,6 +30,30 @@ import { StudentDetailModal } from './components/StudentDetailModal';
 import { AppSettingsModal } from './components/AppSettingsModal';
 import { Toast } from './components/Toast';
 
+import {
+  loadClassRoom,
+  saveClassRoom,
+  loadStudents,
+  saveStudents,
+  loadAssignments,
+  saveAssignments,
+  loadSubmissions,
+  saveSubmissions,
+  loadSheetsConfig,
+  saveSheetsConfig,
+  loadSupabaseConfig,
+  saveSupabaseConfig
+} from './services/storageService';
+
+import {
+  initSupabase,
+  fetchSupabaseData,
+  upsertSubmissionsToSupabase,
+  syncStudentsToSupabase,
+  syncAssignmentsToSupabase,
+  subscribeToSubmissions
+} from './services/supabaseService';
+
 export default function App() {
   // State Initialization
   const [classRoom, setClassRoom] = useState<ClassRoom>(loadClassRoom);
@@ -65,7 +70,8 @@ export default function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
 
-  // Modals state
+  // Modals & Navigation state
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isNoticeModalOpen, setIsNoticeModalOpen] = useState(false);
   const [isRosterModalOpen, setIsRosterModalOpen] = useState(false);
   const [isNewAssignmentModalOpen, setIsNewAssignmentModalOpen] = useState(false);
@@ -86,57 +92,168 @@ export default function App() {
     }, 2800);
   }, []);
 
+  // Check for mobile QR sync parameters on load
+  useEffect(() => {
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      const syncPayload = searchParams.get('syncData');
+
+      if (syncPayload) {
+        const decoded = JSON.parse(decodeURIComponent(escape(atob(syncPayload))));
+        if (decoded.classRoom) {
+          setClassRoom(decoded.classRoom);
+          saveClassRoom(decoded.classRoom);
+        }
+        if (decoded.students && Array.isArray(decoded.students)) {
+          setStudents(decoded.students);
+          saveStudents(decoded.students);
+        }
+        if (decoded.supabaseConfig) {
+          setSupabaseConfig(decoded.supabaseConfig);
+          saveSupabaseConfig(decoded.supabaseConfig);
+        }
+        if (decoded.sheetsConfig) {
+          setSheetsConfig(decoded.sheetsConfig);
+          saveSheetsConfig(decoded.sheetsConfig);
+        }
+        showToast('📱 데스크탑 학급 데이터 및 연동 설정이 스마트폰에 동기화되었습니다!');
+        
+        // Clean URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    } catch (e) {
+      console.error('Failed to parse sync data from URL', e);
+    }
+  }, [showToast]);
+
   // Active assignment
   const activeAssignment = useMemo(() => {
     return assignments.find(a => a.id === activeAssignmentId) || assignments[0];
   }, [assignments, activeAssignmentId]);
 
-  // Current submissions for active assignment
-  const currentSubmissions = useMemo((): Record<string, SubmissionItem> => {
-    if (!activeAssignment) return {};
-    return submissionsMap[activeAssignment.id] || {};
-  }, [submissionsMap, activeAssignment]);
+  // Realtime Supabase Sync Setup
+  useEffect(() => {
+    if (!supabaseConfig.isEnabled || !supabaseConfig.url || !supabaseConfig.anonKey) {
+      return;
+    }
 
-  // Stats calculation
+    const client = initSupabase(supabaseConfig);
+    if (!client) return;
+
+    // Initial fetch from cloud
+    const loadRemote = async () => {
+      try {
+        const data = await fetchSupabaseData(supabaseConfig, classRoom.id);
+        if (data.students.length > 0) {
+          setStudents(data.students);
+          saveStudents(data.students);
+        }
+        if (data.assignments.length > 0) {
+          setAssignments(data.assignments);
+          saveAssignments(data.assignments);
+          if (!activeAssignmentId && data.assignments[0]) {
+            setActiveAssignmentId(data.assignments[0].id);
+          }
+        }
+        if (Object.keys(data.submissionsMap).length > 0) {
+          setSubmissionsMap(prev => {
+            const merged = { ...prev, ...data.submissionsMap };
+            saveSubmissions(merged);
+            return merged;
+          });
+        }
+      } catch (err) {
+        console.error('Supabase initial fetch failed:', err);
+      }
+    };
+
+    loadRemote();
+
+    // Subscribe to realtime changes
+    const channel = subscribeToSubmissions(
+      supabaseConfig,
+      classRoom.id,
+      (remoteSub) => {
+        setSubmissionsMap(prev => {
+          const asgSubs = prev[remoteSub.assignment_id] || {};
+          const currentItem = asgSubs[remoteSub.student_id];
+          
+          if (currentItem && new Date(currentItem.updatedAt).getTime() >= new Date(remoteSub.updated_at).getTime()) {
+            return prev;
+          }
+
+          const updated: SubmissionMap = {
+            ...prev,
+            [remoteSub.assignment_id]: {
+              ...asgSubs,
+              [remoteSub.student_id]: {
+                status: remoteSub.status as SubmissionStatus,
+                note: remoteSub.note || undefined,
+                updatedAt: remoteSub.updated_at,
+              }
+            }
+          };
+          saveSubmissions(updated);
+          return updated;
+        });
+      }
+    );
+
+    return () => {
+      if (channel && client) {
+        client.removeChannel(channel);
+      }
+    };
+  }, [supabaseConfig, classRoom.id, activeAssignmentId]);
+
+  // Current submissions for active assignment
+  const currentSubmissions = useMemo(() => {
+    if (!activeAssignment?.id) return {};
+    return submissionsMap[activeAssignment.id] || {};
+  }, [submissionsMap, activeAssignment?.id]);
+
+  // Calculated stats
   const totalStudents = students.length;
   const submittedCount = useMemo(() => {
-    return (Object.values(currentSubmissions) as SubmissionItem[]).filter(s => s?.status === 'submitted').length;
+    return (Object.values(currentSubmissions) as ({ status: SubmissionStatus } | undefined)[]).filter(
+      s => s?.status === 'submitted'
+    ).length;
   }, [currentSubmissions]);
 
+  const missingCount = totalStudents - submittedCount;
   const resubmitCount = useMemo(() => {
-    return (Object.values(currentSubmissions) as SubmissionItem[]).filter(s => s?.status === 'resubmit').length;
+    return (Object.values(currentSubmissions) as ({ status: SubmissionStatus } | undefined)[]).filter(
+      s => s?.status === 'resubmit'
+    ).length;
   }, [currentSubmissions]);
 
-  const missingCount = Math.max(0, totalStudents - submittedCount);
-
-  // Filtered students according to filterMode
+  // Filter students based on filterMode
   const filteredStudents = useMemo(() => {
-    if (filterMode === 'all') return students;
-    if (filterMode === 'submitted') {
-      return students.filter(st => currentSubmissions[st.id]?.status === 'submitted');
-    }
-    if (filterMode === 'pending') {
-      return students.filter(st => {
-        const s = currentSubmissions[st.id]?.status || 'pending';
-        return s === 'pending';
-      });
-    }
-    if (filterMode === 'resubmit') {
-      return students.filter(st => currentSubmissions[st.id]?.status === 'resubmit');
-    }
-    return students;
+    return students.filter(student => {
+      const sub = currentSubmissions[student.id];
+      const status = sub?.status || 'pending';
+
+      if (filterMode === 'all') return true;
+      if (filterMode === 'submitted') return status === 'submitted';
+      if (filterMode === 'pending') return status === 'pending';
+      if (filterMode === 'resubmit') return status === 'resubmit';
+      return true;
+    });
   }, [students, currentSubmissions, filterMode]);
 
-  // Persistence helpers
+  // Handlers
   const handleUpdateClassRoom = (updated: ClassRoom) => {
     setClassRoom(updated);
     saveClassRoom(updated);
-    showToast('🏫 학급 정보가 저장되었습니다.');
   };
 
-  const handleSaveStudents = (newStudents: Student[]) => {
-    setStudents(newStudents);
-    saveStudents(newStudents);
+  const handleUpdateStudents = (updatedStudents: Student[]) => {
+    setStudents(updatedStudents);
+    saveStudents(updatedStudents);
+
+    if (supabaseConfig.isEnabled && supabaseConfig.url) {
+      syncStudentsToSupabase(supabaseConfig, classRoom.id, updatedStudents);
+    }
   };
 
   const handleAddAssignment = (newAsg: Assignment) => {
@@ -144,136 +261,155 @@ export default function App() {
     setAssignments(updated);
     saveAssignments(updated);
     setActiveAssignmentId(newAsg.id);
+
+    if (supabaseConfig.isEnabled && supabaseConfig.url) {
+      syncAssignmentsToSupabase(supabaseConfig, classRoom.id, updated);
+    }
   };
 
-  const handleDeleteAssignment = (assignmentId: string, title: string) => {
-    const updated = assignments.filter(a => a.id !== assignmentId);
+  const handleDeleteAssignment = (id: string, title: string) => {
+    const updated = assignments.filter(a => a.id !== id);
     setAssignments(updated);
     saveAssignments(updated);
 
     const updatedSubmissions = { ...submissionsMap };
-    delete updatedSubmissions[assignmentId];
+    delete updatedSubmissions[id];
     setSubmissionsMap(updatedSubmissions);
     saveSubmissions(updatedSubmissions);
 
-    if (activeAssignmentId === assignmentId) {
-      setActiveAssignmentId(updated.length > 0 ? updated[0].id : null);
+    if (activeAssignmentId === id) {
+      setActiveAssignmentId(updated[0]?.id || '');
+    }
+
+    if (supabaseConfig.isEnabled && supabaseConfig.url) {
+      syncAssignmentsToSupabase(supabaseConfig, classRoom.id, updated);
     }
 
     showToast(`🗑️ '${title}' 과제가 삭제되었습니다.`);
   };
 
-  // Toggle single student submission status
   const handleToggleStatus = (studentId: string) => {
-    if (!activeAssignment) return;
+    if (!activeAssignment?.id) return;
 
     const asgId = activeAssignment.id;
-    const existing = currentSubmissions[studentId] || { status: 'pending' };
+    const currentSub = currentSubmissions[studentId] || { status: 'pending' };
     
-    // Cycle: pending -> submitted -> resubmit -> pending
-    let nextStatus: SubmissionStatus = 'submitted';
-    if (existing.status === 'submitted') nextStatus = 'pending';
-    else if (existing.status === 'pending') nextStatus = 'submitted';
-    else if (existing.status === 'resubmit') nextStatus = 'submitted';
-    else if (existing.status === 'excused') nextStatus = 'submitted';
+    // Cycle: pending -> submitted -> pending
+    const newStatus: SubmissionStatus = currentSub.status === 'submitted' ? 'pending' : 'submitted';
+    const nowIso = new Date().toISOString();
 
-    const updatedSubmissions: SubmissionMap = {
+    const updatedSubItem: SubmissionItem = {
+      ...currentSub,
+      status: newStatus,
+      updatedAt: nowIso,
+    };
+
+    const updatedMap: SubmissionMap = {
       ...submissionsMap,
       [asgId]: {
-        ...submissionsMap[asgId],
-        [studentId]: {
-          ...existing,
-          status: nextStatus,
-          submittedAt: nextStatus === 'submitted' ? new Date().toISOString() : undefined,
-        }
+        ...currentSubmissions,
+        [studentId]: updatedSubItem,
       }
     };
 
-    setSubmissionsMap(updatedSubmissions);
-    saveSubmissions(updatedSubmissions);
+    setSubmissionsMap(updatedMap);
+    saveSubmissions(updatedMap);
 
-    // If this makes it 100% completed, trigger celebratory confetti!
-    const newSubmittedCount = Object.values(updatedSubmissions[asgId] || {}).filter(s => s?.status === 'submitted').length;
-    if (newSubmittedCount === totalStudents && totalStudents > 0) {
+    // Sync to Supabase
+    if (supabaseConfig.isEnabled && supabaseConfig.url) {
+      upsertSubmissionsToSupabase(supabaseConfig, classRoom.id, asgId, [{
+        studentId,
+        status: newStatus,
+        note: currentSub.note,
+        updatedAt: nowIso,
+      }]);
+    }
+
+    // Trigger celebration if this submission achieves 100%
+    if (newStatus === 'submitted' && (submittedCount + 1) === totalStudents && totalStudents > 0) {
       try {
         confetti({
-          particleCount: 80,
+          particleCount: 120,
           spread: 70,
           origin: { y: 0.6 },
           colors: ['#A3B18A', '#588157', '#BC6C25', '#DDA15E', '#EAE5D8']
         });
+        showToast('🎉 축하합니다! 모든 학생이 제출을 완료했습니다!');
       } catch (e) {
         console.error(e);
       }
-      showToast('🎉 축하합니다! 학급 전원이 제출을 완료했습니다!');
     }
   };
 
-  // Set precise status
-  const handleChangeStatus = (studentId: string, status: SubmissionStatus) => {
-    if (!activeAssignment) return;
-    const asgId = activeAssignment.id;
-    const existing = currentSubmissions[studentId] || { status: 'pending' };
+  const handleChangeStatus = (studentId: string, newStatus: SubmissionStatus, note?: string) => {
+    if (!activeAssignment?.id) return;
 
-    const updatedSubmissions: SubmissionMap = {
+    const asgId = activeAssignment.id;
+    const currentSub = currentSubmissions[studentId] || { status: 'pending' };
+    const nowIso = new Date().toISOString();
+
+    const updatedSubItem: SubmissionItem = {
+      status: newStatus,
+      note: note !== undefined ? note : currentSub.note,
+      updatedAt: nowIso,
+    };
+
+    const updatedMap: SubmissionMap = {
       ...submissionsMap,
       [asgId]: {
-        ...submissionsMap[asgId],
-        [studentId]: {
-          ...existing,
-          status,
-          submittedAt: status === 'submitted' ? new Date().toISOString() : undefined,
-        }
+        ...currentSubmissions,
+        [studentId]: updatedSubItem,
       }
     };
 
-    setSubmissionsMap(updatedSubmissions);
-    saveSubmissions(updatedSubmissions);
+    setSubmissionsMap(updatedMap);
+    saveSubmissions(updatedMap);
+
+    if (supabaseConfig.isEnabled && supabaseConfig.url) {
+      upsertSubmissionsToSupabase(supabaseConfig, classRoom.id, asgId, [{
+        studentId,
+        status: newStatus,
+        note: updatedSubItem.note,
+        updatedAt: nowIso,
+      }]);
+    }
   };
 
-  // Save student note and status from modal
-  const handleSaveStudentDetail = (studentId: string, status: SubmissionStatus, note: string) => {
-    if (!activeAssignment) return;
-    const asgId = activeAssignment.id;
-
-    const updatedSubmissions: SubmissionMap = {
-      ...submissionsMap,
-      [asgId]: {
-        ...submissionsMap[asgId],
-        [studentId]: {
-          status,
-          note,
-          submittedAt: status === 'submitted' ? new Date().toISOString() : undefined,
-        }
-      }
-    };
-
-    setSubmissionsMap(updatedSubmissions);
-    saveSubmissions(updatedSubmissions);
-  };
-
-  // Check all students as submitted
   const handleCheckAll = () => {
-    if (!activeAssignment) return;
-    const asgId = activeAssignment.id;
-    const newAsgMap: Record<string, SubmissionItem> = {};
+    if (!activeAssignment?.id || students.length === 0) return;
 
-    students.forEach(st => {
-      const prev = currentSubmissions[st.id];
-      newAsgMap[st.id] = {
+    const asgId = activeAssignment.id;
+    const nowIso = new Date().toISOString();
+    const updatedCurrentAsg: Record<string, SubmissionItem> = {};
+    const supabasePayload: { studentId: string; status: SubmissionStatus; note?: string; updatedAt: string }[] = [];
+
+    students.forEach(student => {
+      const existing = currentSubmissions[student.id];
+      const subItem: SubmissionItem = {
         status: 'submitted',
-        note: prev?.note,
-        submittedAt: new Date().toISOString(),
+        note: existing?.note,
+        updatedAt: nowIso,
       };
+      updatedCurrentAsg[student.id] = subItem;
+      supabasePayload.push({
+        studentId: student.id,
+        status: 'submitted',
+        note: existing?.note,
+        updatedAt: nowIso,
+      });
     });
 
-    const updatedSubmissions: SubmissionMap = {
+    const updatedSubmissions = {
       ...submissionsMap,
-      [asgId]: newAsgMap,
+      [asgId]: updatedCurrentAsg,
     };
 
     setSubmissionsMap(updatedSubmissions);
     saveSubmissions(updatedSubmissions);
+
+    if (supabaseConfig.isEnabled && supabaseConfig.url) {
+      upsertSubmissionsToSupabase(supabaseConfig, classRoom.id, asgId, supabasePayload);
+    }
 
     try {
       confetti({
@@ -319,7 +455,7 @@ export default function App() {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-[#FAF9F6] text-[#5D574F] font-sans overflow-hidden select-none">
-      {/* Top Header with Natural Tones */}
+      {/* Top Header with Natural Tones and Mobile Navigation Trigger */}
       <Header
         classRoom={classRoom}
         onUpdateClassRoom={handleUpdateClassRoom}
@@ -330,11 +466,13 @@ export default function App() {
         onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
         onOpenSheetsModal={() => setIsSheetsModalOpen(true)}
         onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
+        onToggleMobileSidebar={() => setIsMobileSidebarOpen(prev => !prev)}
+        isMobileSidebarOpen={isMobileSidebarOpen}
       />
 
       {/* Main Workspace Layout */}
-      <main className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar */}
+      <main className="flex-1 flex overflow-hidden relative">
+        {/* Left Sidebar (Responsive Drawer on Mobile, Fixed on Desktop) */}
         <Sidebar
           assignments={assignments}
           activeAssignmentId={activeAssignment?.id || null}
@@ -343,10 +481,12 @@ export default function App() {
           onDeleteAssignment={handleDeleteAssignment}
           students={students}
           submissionsMap={submissionsMap}
+          isMobileOpen={isMobileSidebarOpen}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
         />
 
         {/* Right Main Checklist View Panel */}
-        <section className="flex-1 p-6 md:p-8 overflow-y-auto bg-white flex flex-col">
+        <section className="flex-1 p-3.5 sm:p-6 md:p-8 overflow-y-auto bg-white flex flex-col">
           {/* Assignment Header / Controls */}
           <AssignmentHeader
             assignment={activeAssignment}
@@ -396,11 +536,12 @@ export default function App() {
         </section>
       </main>
 
-      {/* Natural Tones Footer */}
-      <footer className="h-11 bg-[#FAF9F6] border-t border-[#DCD5C8] px-6 md:px-8 flex items-center justify-between text-[11px] font-medium text-[#A89F91] shrink-0">
-        <div>&copy; 2026 {classRoom.schoolName} {classRoom.grade}학년 {classRoom.classNumber}반 학급 도우미 v1.2.0</div>
-        <div className="flex items-center gap-3 text-[11px]">
-          <span>데이터 저장 상태:</span>
+      {/* Natural Tones Footer (Compact on Mobile) */}
+      <footer className="h-10 md:h-11 bg-[#FAF9F6] border-t border-[#DCD5C8] px-3.5 sm:px-6 md:px-8 flex items-center justify-between text-[10px] sm:text-[11px] font-medium text-[#A89F91] shrink-0">
+        <div className="truncate">
+          &copy; 2026 {classRoom.schoolName} {classRoom.grade}학년 {classRoom.classNumber}반
+        </div>
+        <div className="flex items-center gap-2 text-[10px] sm:text-[11px] shrink-0">
           <button
             onClick={() => setIsSupabaseModalOpen(true)}
             className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-semibold border cursor-pointer transition-colors ${
@@ -408,10 +549,10 @@ export default function App() {
                 ? 'bg-[#E8F0E4] text-[#3D5A30] border-[#A3B18A]'
                 : 'bg-amber-50 text-[#8C4A1A] border-amber-300 hover:bg-amber-100'
             }`}
-            title="클릭하여 Supabase 연동 설정 열기"
+            title="Supabase 실시간 클라우드 연동 상태"
           >
-            <span className={`w-2 h-2 rounded-full ${supabaseConfig.isEnabled && supabaseConfig.url ? 'bg-[#588157] animate-pulse' : 'bg-[#BC6C25]'}`} />
-            <span>{supabaseConfig.isEnabled && supabaseConfig.url ? 'Supabase 클라우드 실시간 동기화' : '로컬 캐시 안전 보관 (클라우드 연동하기)'}</span>
+            <span className={`w-1.5 h-1.5 rounded-full ${supabaseConfig.isEnabled && supabaseConfig.url ? 'bg-[#588157] animate-pulse' : 'bg-[#BC6C25]'}`} />
+            <span>{supabaseConfig.isEnabled && supabaseConfig.url ? '실시간 동기화' : '로컬 모드 (연동)'}</span>
           </button>
         </div>
       </footer>
@@ -430,26 +571,25 @@ export default function App() {
         isOpen={isRosterModalOpen}
         onClose={() => setIsRosterModalOpen(false)}
         students={students}
-        onSaveStudents={handleSaveStudents}
+        onUpdateStudents={handleUpdateStudents}
         onShowToast={showToast}
       />
 
       <NewAssignmentModal
         isOpen={isNewAssignmentModalOpen}
         onClose={() => setIsNewAssignmentModalOpen(false)}
-        classId={classRoom.id}
         onAddAssignment={handleAddAssignment}
-        onShowToast={showToast}
       />
 
       <GoogleSheetsModal
         isOpen={isSheetsModalOpen}
         onClose={() => setIsSheetsModalOpen(false)}
-        assignment={activeAssignment}
-        students={students}
-        submissions={currentSubmissions}
         config={sheetsConfig}
         onSaveConfig={handleSaveSheetsConfig}
+        activeAssignment={activeAssignment}
+        students={students}
+        submissions={currentSubmissions}
+        classRoom={classRoom}
         onShowToast={showToast}
       />
 
@@ -458,6 +598,10 @@ export default function App() {
         onClose={() => setIsSupabaseModalOpen(false)}
         config={supabaseConfig}
         onSaveConfig={handleSaveSupabaseConfig}
+        classRoomId={classRoom.id}
+        students={students}
+        assignments={assignments}
+        submissionsMap={submissionsMap}
         onShowToast={showToast}
       />
 
@@ -465,19 +609,44 @@ export default function App() {
         isOpen={isPrintModalOpen}
         onClose={() => setIsPrintModalOpen(false)}
         classRoom={classRoom}
-        assignment={activeAssignment}
         students={students}
-        submissions={currentSubmissions}
+        assignments={assignments}
+        submissionsMap={submissionsMap}
       />
 
       <StudentDetailModal
+        student={selectedStudentForDetail}
         isOpen={Boolean(selectedStudentForDetail)}
         onClose={() => setSelectedStudentForDetail(null)}
-        student={selectedStudentForDetail}
-        currentStatus={selectedStudentForDetail ? (currentSubmissions[selectedStudentForDetail.id]?.status || 'pending') : 'pending'}
-        currentNote={selectedStudentForDetail ? (currentSubmissions[selectedStudentForDetail.id]?.note || '') : ''}
-        onSave={handleSaveStudentDetail}
-        onShowToast={showToast}
+        assignments={assignments}
+        submissionsMap={submissionsMap}
+        onUpdateStatus={(studentId, asgId, status, note) => {
+          const nowIso = new Date().toISOString();
+          const asgSubs = submissionsMap[asgId] || {};
+          const updatedSubItem: SubmissionItem = {
+            status,
+            note,
+            updatedAt: nowIso,
+          };
+          const updatedMap: SubmissionMap = {
+            ...submissionsMap,
+            [asgId]: {
+              ...asgSubs,
+              [studentId]: updatedSubItem,
+            }
+          };
+          setSubmissionsMap(updatedMap);
+          saveSubmissions(updatedMap);
+
+          if (supabaseConfig.isEnabled && supabaseConfig.url) {
+            upsertSubmissionsToSupabase(supabaseConfig, classRoom.id, asgId, [{
+              studentId,
+              status,
+              note,
+              updatedAt: nowIso,
+            }]);
+          }
+        }}
       />
 
       <AppSettingsModal
@@ -487,14 +656,8 @@ export default function App() {
         onUpdateClassRoom={handleUpdateClassRoom}
         supabaseConfig={supabaseConfig}
         sheetsConfig={sheetsConfig}
-        onOpenSupabaseModal={() => {
-          setIsSettingsModalOpen(false);
-          setIsSupabaseModalOpen(true);
-        }}
-        onOpenSheetsModal={() => {
-          setIsSettingsModalOpen(false);
-          setIsSheetsModalOpen(true);
-        }}
+        onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
+        onOpenSheetsModal={() => setIsSheetsModalOpen(true)}
         students={students}
         assignments={assignments}
         submissionsMap={submissionsMap}
@@ -502,7 +665,7 @@ export default function App() {
         onShowToast={showToast}
       />
 
-      {/* Notification Toast */}
+      {/* Toast notifications */}
       <Toast message={toastMessage} />
     </div>
   );
