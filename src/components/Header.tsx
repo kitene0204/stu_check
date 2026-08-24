@@ -11,7 +11,6 @@ import {
   Share2,
   RefreshCw,
   CheckCircle2,
-  Sparkles
 } from 'lucide-react';
 import { ClassRoom, SupabaseConfig, GoogleSheetsConfig } from '../types';
 
@@ -60,14 +59,14 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="bg-[#EAE5D8] border-b border-[#DCD5C8] shrink-0 select-none z-30 shadow-xs">
-      <div className="h-16 md:h-20 px-3.5 sm:px-6 md:px-8 flex items-center justify-between">
-        {/* Left: Mobile Drawer Trigger + Brand & Class Info */}
-        <div className="flex items-center gap-2 sm:gap-3 md:gap-4 overflow-hidden">
+      <div className="h-16 md:h-20 px-3 sm:px-6 md:px-8 flex items-center justify-between gap-2">
+        {/* Left: Mobile Drawer Trigger + Brand & Class Info (min-w-0 for ellipsis without wrapping/overflow) */}
+        <div className="flex items-center gap-2 sm:gap-3 md:gap-4 min-w-0 flex-1 overflow-hidden">
           {/* Mobile Sidebar (Assignment List) Drawer Toggle Button */}
           {onToggleMobileSidebar && (
             <button
               onClick={onToggleMobileSidebar}
-              className="md:hidden p-2 rounded-xl bg-white/80 border border-[#DCD5C8] text-[#3D3A35] hover:bg-white active:scale-95 transition-all shadow-xs"
+              className="md:hidden p-1.5 sm:p-2 rounded-xl bg-white/80 border border-[#DCD5C8] text-[#3D3A35] hover:bg-white active:scale-95 transition-all shadow-xs shrink-0 cursor-pointer"
               title="과제 목록 열기/닫기"
             >
               <Menu className="w-5 h-5" />
@@ -76,28 +75,28 @@ export const Header: React.FC<HeaderProps> = ({
 
           <button
             onClick={onOpenSettingsModal}
-            className="w-9 h-9 sm:w-10 sm:h-10 md:w-11 md:h-11 bg-[#A3B18A] hover:bg-[#8F9E75] rounded-xl sm:rounded-2xl flex items-center justify-center text-white shadow-xs transition-transform hover:scale-105 shrink-0 cursor-pointer"
+            className="w-8 h-8 sm:w-10 sm:h-10 md:w-11 md:h-11 bg-[#A3B18A] hover:bg-[#8F9E75] rounded-lg sm:rounded-2xl flex items-center justify-center text-white shadow-xs transition-transform hover:scale-105 shrink-0 cursor-pointer"
             title="웹앱 및 학급 설정 열기"
           >
-            <GraduationCap className="w-5 h-5 md:w-6 md:h-6" />
+            <GraduationCap className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
           </button>
 
           <div 
-            className="cursor-pointer overflow-hidden group" 
+            className="cursor-pointer min-w-0 flex-1 group" 
             onClick={onOpenSettingsModal} 
             title="클릭하여 제목 및 학급 설정 수정"
           >
-            <h1 className="text-sm sm:text-base md:text-xl font-bold tracking-tight text-[#3D3A35] truncate flex items-center gap-1.5">
+            <h1 className="text-xs sm:text-base md:text-xl font-bold tracking-tight text-[#3D3A35] truncate">
               {displayTitle}
             </h1>
-            <p className="text-[9px] sm:text-[10px] md:text-[11px] text-[#5D574F]/80 uppercase tracking-wider md:tracking-widest font-medium truncate">
+            <p className="text-[8px] sm:text-[10px] md:text-[11px] text-[#5D574F]/80 uppercase tracking-tight md:tracking-widest font-medium truncate">
               {displaySubtitle}
             </p>
           </div>
         </div>
 
-        {/* Right: Desktop Action Bar */}
-        <div className="hidden lg:flex items-center gap-2.5">
+        {/* Right: Desktop Action Bar (Visible on lg and larger) */}
+        <div className="hidden lg:flex items-center gap-2.5 shrink-0">
           {/* Realtime Manual Sync Button with Animated Spinner & Status Indicator */}
           <button
             onClick={onTriggerManualSync}
@@ -200,23 +199,29 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         </div>
 
-        {/* Mobile Header Right Actions */}
-        <div className="flex lg:hidden items-center gap-1.5">
-          {/* Mobile Manual Sync Icon/Pill */}
+        {/* Mobile Header Right Actions (Compact, responsive, and non-overlapping) */}
+        <div className="flex lg:hidden items-center gap-1 sm:gap-1.5 shrink-0">
+          {/* Mobile Manual Sync Icon/Pill: Icon only on very small screens, short badge on sm */}
           <button
             onClick={onTriggerManualSync}
             disabled={isSyncing}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs border active:scale-95 ${
+            className={`flex items-center gap-1 p-2 sm:px-2.5 sm:py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs border active:scale-95 shrink-0 cursor-pointer ${
               isSyncing
-                ? 'bg-[#EBF5EE] border-[#2D6A4F] text-[#2D6A4F]'
+                ? 'bg-[#EBF5EE] border-[#2D6A4F] text-[#2D6A4F] ring-1 ring-[#2D6A4F]/30'
                 : isSynced
                   ? 'bg-[#E8F0E4] border-[#A3B18A] text-[#3D5A30]'
-                  : 'bg-white border-[#DCD5C8] text-[#3D3A35]'
+                  : 'bg-white border-[#DCD5C8] text-[#3D3A35] hover:bg-[#FAF9F5]'
             }`}
-            title="즉시 수동 동기화"
+            title={isSyncing ? '동기화 중...' : isSynced ? '동기화 완료' : '즉시 수동 동기화'}
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-[#2D6A4F]' : isSynced ? 'text-[#2D6A4F]' : 'text-[#5D574F]'}`} />
-            <span className="text-[11px] font-bold">
+            {isSyncing ? (
+              <RefreshCw className="w-4 h-4 text-[#2D6A4F] animate-spin" />
+            ) : isSynced ? (
+              <CheckCircle2 className="w-4 h-4 text-[#2D6A4F]" />
+            ) : (
+              <RefreshCw className="w-4 h-4 text-[#5D574F]" />
+            )}
+            <span className="hidden sm:inline text-[11px] font-bold">
               {isSyncing ? '동기화 중' : isSynced ? '완료' : '동기화'}
             </span>
           </button>
@@ -224,7 +229,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Quick Settings Icon Button */}
           <button
             onClick={onOpenSettingsModal}
-            className="p-2 bg-[#2D6A4F] text-white rounded-xl shadow-xs active:scale-95 transition-transform"
+            className="p-2 bg-[#2D6A4F] hover:bg-[#23533E] text-white rounded-xl shadow-xs active:scale-95 transition-transform shrink-0 cursor-pointer"
             title="설정 및 연동 QR"
           >
             <Settings className="w-4 h-4" />
@@ -233,7 +238,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Mobile Quick Menu Dropdown Toggle */}
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-2 bg-white/80 border border-[#DCD5C8] text-[#3D3A35] rounded-xl shadow-xs active:scale-95 transition-transform"
+            className="p-2 bg-white/80 hover:bg-white border border-[#DCD5C8] text-[#3D3A35] rounded-xl shadow-xs active:scale-95 transition-transform shrink-0 cursor-pointer"
             title="더보기 메뉴"
           >
             {isMobileMenuOpen ? <X className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
@@ -243,7 +248,31 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Mobile Top Menu Overlay Dropdown */}
       {isMobileMenuOpen && (
-        <div className="lg:hidden px-4 py-3 bg-[#FAF9F6] border-t border-[#DCD5C8] flex flex-wrap gap-2 animate-in slide-in-from-top duration-200">
+        <div className="lg:hidden px-3.5 py-3 bg-[#FAF9F6] border-t border-[#DCD5C8] flex flex-wrap gap-2 animate-in slide-in-from-top duration-200">
+          {/* Mobile explicit sync status in drawer menu */}
+          <button
+            onClick={() => {
+              setIsMobileMenuOpen(false);
+              onTriggerManualSync();
+            }}
+            disabled={isSyncing}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs font-bold transition-all shadow-xs ${
+              isSyncing
+                ? 'bg-[#EBF5EE] border-[#2D6A4F] text-[#2D6A4F]'
+                : isSynced
+                  ? 'bg-[#E8F0E4] border-[#A3B18A] text-[#3D5A30]'
+                  : 'bg-white border-[#DCD5C8] text-[#3D3A35]'
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin text-[#2D6A4F]' : isSynced ? 'text-[#2D6A4F]' : 'text-[#5D574F]'}`} />
+              <span>클라우드 & 구글 시트 동기화</span>
+            </span>
+            <span className="text-[11px] font-extrabold">
+              {isSyncing ? '동기화 진행 중...' : isSynced ? '동기화 완료됨' : '지금 동기화 실행'}
+            </span>
+          </button>
+
           <button
             onClick={() => {
               setIsMobileMenuOpen(false);
