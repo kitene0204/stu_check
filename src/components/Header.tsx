@@ -9,15 +9,21 @@ import {
   Menu,
   X,
   Share2,
-  QrCode
+  RefreshCw,
+  CheckCircle2,
+  Sparkles
 } from 'lucide-react';
 import { ClassRoom, SupabaseConfig, GoogleSheetsConfig } from '../types';
+
+export type SyncState = 'idle' | 'syncing' | 'synced' | 'error';
 
 interface HeaderProps {
   classRoom: ClassRoom;
   onUpdateClassRoom: (updated: ClassRoom) => void;
   supabaseConfig: SupabaseConfig;
   sheetsConfig: GoogleSheetsConfig;
+  syncState: SyncState;
+  onTriggerManualSync: () => void;
   onOpenRosterModal: () => void;
   onOpenPrintModal: () => void;
   onOpenSupabaseModal: () => void;
@@ -30,13 +36,14 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   classRoom,
   supabaseConfig,
+  syncState,
+  onTriggerManualSync,
   onOpenRosterModal,
   onOpenPrintModal,
   onOpenSupabaseModal,
   onOpenSheetsModal,
   onOpenSettingsModal,
   onToggleMobileSidebar,
-  isMobileSidebarOpen,
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -48,8 +55,11 @@ export const Header: React.FC<HeaderProps> = ({
     ? classRoom.customSubtitle
     : 'STUDENT ASSIGNMENT & SUBMISSION TRACKER';
 
+  const isSyncing = syncState === 'syncing';
+  const isSynced = syncState === 'synced';
+
   return (
-    <header className="bg-[#EAE5D8] border-b border-[#DCD5C8] shrink-0 select-none z-30">
+    <header className="bg-[#EAE5D8] border-b border-[#DCD5C8] shrink-0 select-none z-30 shadow-xs">
       <div className="h-16 md:h-20 px-3.5 sm:px-6 md:px-8 flex items-center justify-between">
         {/* Left: Mobile Drawer Trigger + Brand & Class Info */}
         <div className="flex items-center gap-2 sm:gap-3 md:gap-4 overflow-hidden">
@@ -88,6 +98,39 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right: Desktop Action Bar */}
         <div className="hidden lg:flex items-center gap-2.5">
+          {/* Realtime Manual Sync Button with Animated Spinner & Status Indicator */}
+          <button
+            onClick={onTriggerManualSync}
+            disabled={isSyncing}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs transition-all shadow-xs cursor-pointer border active:scale-95 ${
+              isSyncing
+                ? 'bg-[#EBF5EE] border-[#2D6A4F] text-[#2D6A4F] ring-2 ring-[#2D6A4F]/20'
+                : isSynced
+                  ? 'bg-[#E8F0E4] border-[#A3B18A] text-[#3D5A30] hover:bg-[#DCE9D6]'
+                  : 'bg-white hover:bg-[#FAF9F5] border-[#DCD5C8] text-[#3D3A35]'
+            }`}
+            title="구글 시트 / Supabase / 스마트폰 전체 즉시 동기화"
+          >
+            {isSyncing ? (
+              <>
+                <RefreshCw className="w-4 h-4 text-[#2D6A4F] animate-spin" />
+                <span className="font-extrabold text-[#2D6A4F]">동기화 중...</span>
+              </>
+            ) : isSynced ? (
+              <>
+                <CheckCircle2 className="w-4 h-4 text-[#2D6A4F] animate-in zoom-in-50" />
+                <span className="font-extrabold text-[#2D6A4F]">동기화 완료</span>
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-4 h-4 text-[#5D574F]" />
+                <span>수동 동기화</span>
+              </>
+            )}
+          </button>
+
+          <div className="h-4 w-px bg-[#DCD5C8] mx-0.5" />
+
           {/* Supabase Status Pill */}
           <button
             onClick={onOpenSupabaseModal}
@@ -159,6 +202,25 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Mobile Header Right Actions */}
         <div className="flex lg:hidden items-center gap-1.5">
+          {/* Mobile Manual Sync Icon/Pill */}
+          <button
+            onClick={onTriggerManualSync}
+            disabled={isSyncing}
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs border active:scale-95 ${
+              isSyncing
+                ? 'bg-[#EBF5EE] border-[#2D6A4F] text-[#2D6A4F]'
+                : isSynced
+                  ? 'bg-[#E8F0E4] border-[#A3B18A] text-[#3D5A30]'
+                  : 'bg-white border-[#DCD5C8] text-[#3D3A35]'
+            }`}
+            title="즉시 수동 동기화"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-[#2D6A4F]' : isSynced ? 'text-[#2D6A4F]' : 'text-[#5D574F]'}`} />
+            <span className="text-[11px] font-bold">
+              {isSyncing ? '동기화 중' : isSynced ? '완료' : '동기화'}
+            </span>
+          </button>
+
           {/* Quick Settings Icon Button */}
           <button
             onClick={onOpenSettingsModal}

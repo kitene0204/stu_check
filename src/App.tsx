@@ -8,12 +8,12 @@ import {
   SupabaseConfig, 
   ViewMode, 
   FilterMode, 
-  SubmissionStatus,
-  SubmissionMap,
-  SubmissionItem
+  SubmissionStatus, 
+  SubmissionMap, 
+  SubmissionItem 
 } from './types';
 
-import { Header } from './components/Header';
+import { Header, SyncState } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { AssignmentHeader } from './components/AssignmentHeader';
 import { StudentGrid } from './components/StudentGrid';
@@ -54,6 +54,8 @@ import {
   subscribeToSubmissions
 } from './services/supabaseService';
 
+import { syncToGoogleSheetsWebhook } from './services/googleSheetsService';
+
 export default function App() {
   // State Initialization
   const [classRoom, setClassRoom] = useState<ClassRoom>(loadClassRoom);
@@ -62,6 +64,9 @@ export default function App() {
   const [submissionsMap, setSubmissionsMap] = useState<SubmissionMap>(loadSubmissions);
   const [supabaseConfig, setSupabaseConfig] = useState<SupabaseConfig>(loadSupabaseConfig);
   const [sheetsConfig, setSheetsConfig] = useState<GoogleSheetsConfig>(loadSheetsConfig);
+
+  // Sync state: 'idle' | 'syncing' | 'synced' | 'error'
+  const [syncState, setSyncState] = useState<SyncState>('idle');
 
   const [activeAssignmentId, setActiveAssignmentId] = useState<string>(() => {
     return assignments.length > 0 ? assignments[0].id : '';
@@ -131,6 +136,12 @@ export default function App() {
     return assignments.find(a => a.id === activeAssignmentId) || assignments[0];
   }, [assignments, activeAssignmentId]);
 
+  // Current submissions for active assignment
+  const currentSubmissions = useMemo(() => {
+    if (!activeAssignment?.id) return {};
+    return submissionsMap[activeAssignment.id] || {};
+  }, [submissionsMap, activeAssignment?.id]);
+
   // Realtime Supabase Sync Setup
   useEffect(() => {
     if (!supabaseConfig.isEnabled || !supabaseConfig.url || !supabaseConfig.anonKey) {
@@ -143,6 +154,7 @@ export default function App() {
     // Initial fetch from cloud
     const loadRemote = async () => {
       try {
+        setSyncState('syncing');
         const data = await fetchSupabaseData(supabaseConfig, classRoom.id);
         if (data.students.length > 0) {
           setStudents(data.students);
@@ -162,8 +174,12 @@ export default function App() {
             return merged;
           });
         }
+        setSyncState('synced');
+        setTimeout(() => setSyncState('idle'), 2500);
       } catch (err) {
         console.error('Supabase initial fetch failed:', err);
+        setSyncState('error');
+        setTimeout(() => setSyncState('idle'), 2500);
       }
     };
 
@@ -178,7 +194,7 @@ export default function App() {
           const asgSubs = prev[remoteSub.assignment_id] || {};
           const currentItem = asgSubs[remoteSub.student_id];
           
-          if (currentItem && new Date(currentItem.updatedAt).getTime() >= new Date(remoteSub.updated_at).getTime()) {
+          if (currentItem && new Date(currentItem.updatedAt || 0).getTime() >= new Date(remoteSub.updated_at).getTime()) {
             return prev;
           }
 
@@ -196,6 +212,9 @@ export default function App() {
           saveSubmissions(updated);
           return updated;
         });
+
+        setSyncState('synced');
+        setTimeout(() => setSyncState('idle'), 2000);
       }
     );
 
@@ -206,11 +225,115 @@ export default function App() {
     };
   }, [supabaseConfig, classRoom.id, activeAssignmentId]);
 
-  // Current submissions for active assignment
-  const currentSubmissions = useMemo(() => {
-    if (!activeAssignment?.id) return {};
-    return submissionsMap[activeAssignment.id] || {};
-  }, [submissionsMap, activeAssignment?.id]);
+  // Realtime Automatic Push Sync Helper
+  const triggerAutoSync = useCallback(async (
+    asgId: string, 
+    itemsToSync: { studentId: string; status: SubmissionStatus; note?: string; updatedAt: string }[],
+    updatedSubmissionsForActive?: Record<string, SubmissionItem>
+  ) => {
+    // Show quick subtle syncing state
+    setSyncState('syncing');
+
+    let supabaseOk = false;
+    let sheetsOk = false;
+
+    // 1. Supabase Cloud Sync
+    if (supabaseConfig.isEnabled && supabaseConfig.url) {
+      try {
+        await upsertSubmissionsToSupabase(supabaseConfig, classRoom.id, asgId, itemsToSync);
+        supabaseOk = true;
+      } catch (err) {
+        console.error('Auto sync to Supabase failed:', err);
+      }
+    }
+
+    // 2. Google Sheets Webhook Sync
+    if (sheetsConfig.autoSync && sheetsConfig.webhookUrl && activeAssignment) {
+      try {
+        const subsToUse = updatedSubmissionsForActive || currentSubmissions;
+        await syncToGoogleSheetsWebhook(sheetsConfig, classRoom, activeAssignment, students, subsToUse);
+        sheetsOk = true;
+      } catch (err) {
+        console.error('Auto sync to Google Sheets failed:', err);
+      }
+    }
+
+    // Set synced status
+    setSyncState('synced');
+    setTimeout(() => {
+      setSyncState('idle');
+    }, 2200);
+  }, [supabaseConfig, sheetsConfig, classRoom, activeAssignment, students, currentSubmissions]);
+
+  // Manual Full Sync Button Action
+  const handleTriggerManualSync = useCallback(async () => {
+    setSyncState('syncing');
+    showToast('🔄 클라우드 및 구글 시트 데이터 동기화 중...');
+
+    try {
+      let syncCount = 0;
+
+      // 1. Supabase Sync (Download & Upload latest)
+      if (supabaseConfig.isEnabled && supabaseConfig.url) {
+        // Upload current active assignment submissions
+        if (activeAssignment?.id) {
+          const currentItems = students.map(st => {
+            const sub = currentSubmissions[st.id] || { status: 'pending' };
+            return {
+              studentId: st.id,
+              status: sub.status,
+              note: sub.note,
+              updatedAt: sub.updatedAt || new Date().toISOString()
+            };
+          });
+
+          await upsertSubmissionsToSupabase(supabaseConfig, classRoom.id, activeAssignment.id, currentItems);
+        }
+
+        // Fetch remote updates
+        const remoteData = await fetchSupabaseData(supabaseConfig, classRoom.id);
+        if (Object.keys(remoteData.submissionsMap).length > 0) {
+          setSubmissionsMap(prev => {
+            const merged = { ...prev, ...remoteData.submissionsMap };
+            saveSubmissions(merged);
+            return merged;
+          });
+        }
+        syncCount++;
+      }
+
+      // 2. Google Sheets Webhook Sync
+      if (sheetsConfig.webhookUrl && activeAssignment) {
+        await syncToGoogleSheetsWebhook(sheetsConfig, classRoom, activeAssignment, students, currentSubmissions);
+        syncCount++;
+      }
+
+      // Local storage refresh guarantee
+      saveClassRoom(classRoom);
+      saveStudents(students);
+      saveAssignments(assignments);
+      saveSubmissions(submissionsMap);
+
+      setSyncState('synced');
+
+      if (syncCount > 0) {
+        showToast('✅ 구글 시트 & Supabase & 로컬 데이터 동기화 완료!');
+      } else {
+        showToast('✅ 로컬 데이터 저장 및 동기화 완료! (클라우드 연동 시 자동 실시간 백업)');
+      }
+
+      setTimeout(() => {
+        setSyncState('idle');
+      }, 2500);
+    } catch (e) {
+      console.error('Manual sync error:', e);
+      setSyncState('error');
+      showToast('⚠️ 동기화 중 일부 오류가 발생했습니다.');
+      setTimeout(() => {
+        setSyncState('idle');
+      }, 3000);
+    }
+  }, [supabaseConfig, sheetsConfig, classRoom, activeAssignment, students, currentSubmissions, assignments, submissionsMap, showToast]);
 
   // Calculated stats
   const totalStudents = students.length;
@@ -304,26 +427,26 @@ export default function App() {
       updatedAt: nowIso,
     };
 
+    const newSubmissionsForActive = {
+      ...currentSubmissions,
+      [studentId]: updatedSubItem,
+    };
+
     const updatedMap: SubmissionMap = {
       ...submissionsMap,
-      [asgId]: {
-        ...currentSubmissions,
-        [studentId]: updatedSubItem,
-      }
+      [asgId]: newSubmissionsForActive
     };
 
     setSubmissionsMap(updatedMap);
     saveSubmissions(updatedMap);
 
-    // Sync to Supabase
-    if (supabaseConfig.isEnabled && supabaseConfig.url) {
-      upsertSubmissionsToSupabase(supabaseConfig, classRoom.id, asgId, [{
-        studentId,
-        status: newStatus,
-        note: currentSub.note,
-        updatedAt: nowIso,
-      }]);
-    }
+    // Realtime Push to Supabase & Google Sheets
+    triggerAutoSync(asgId, [{
+      studentId,
+      status: newStatus,
+      note: currentSub.note,
+      updatedAt: nowIso,
+    }], newSubmissionsForActive);
 
     // Trigger celebration if this submission achieves 100%
     if (newStatus === 'submitted' && (submittedCount + 1) === totalStudents && totalStudents > 0) {
@@ -354,25 +477,26 @@ export default function App() {
       updatedAt: nowIso,
     };
 
+    const newSubmissionsForActive = {
+      ...currentSubmissions,
+      [studentId]: updatedSubItem,
+    };
+
     const updatedMap: SubmissionMap = {
       ...submissionsMap,
-      [asgId]: {
-        ...currentSubmissions,
-        [studentId]: updatedSubItem,
-      }
+      [asgId]: newSubmissionsForActive
     };
 
     setSubmissionsMap(updatedMap);
     saveSubmissions(updatedMap);
 
-    if (supabaseConfig.isEnabled && supabaseConfig.url) {
-      upsertSubmissionsToSupabase(supabaseConfig, classRoom.id, asgId, [{
-        studentId,
-        status: newStatus,
-        note: updatedSubItem.note,
-        updatedAt: nowIso,
-      }]);
-    }
+    // Realtime Push to Supabase & Google Sheets
+    triggerAutoSync(asgId, [{
+      studentId,
+      status: newStatus,
+      note: updatedSubItem.note,
+      updatedAt: nowIso,
+    }], newSubmissionsForActive);
   };
 
   const handleCheckAll = () => {
@@ -407,9 +531,8 @@ export default function App() {
     setSubmissionsMap(updatedSubmissions);
     saveSubmissions(updatedSubmissions);
 
-    if (supabaseConfig.isEnabled && supabaseConfig.url) {
-      upsertSubmissionsToSupabase(supabaseConfig, classRoom.id, asgId, supabasePayload);
-    }
+    // Realtime Push to Supabase & Google Sheets
+    triggerAutoSync(asgId, supabasePayload, updatedCurrentAsg);
 
     try {
       confetti({
@@ -455,12 +578,14 @@ export default function App() {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-[#FAF9F6] text-[#5D574F] font-sans overflow-hidden select-none">
-      {/* Top Header with Natural Tones and Mobile Navigation Trigger */}
+      {/* Top Header with Realtime Sync Status & Manual Sync Button */}
       <Header
         classRoom={classRoom}
         onUpdateClassRoom={handleUpdateClassRoom}
         supabaseConfig={supabaseConfig}
         sheetsConfig={sheetsConfig}
+        syncState={syncState}
+        onTriggerManualSync={handleTriggerManualSync}
         onOpenRosterModal={() => setIsRosterModalOpen(true)}
         onOpenPrintModal={() => setIsPrintModalOpen(true)}
         onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
@@ -536,7 +661,7 @@ export default function App() {
         </section>
       </main>
 
-      {/* Natural Tones Footer (Compact on Mobile) */}
+      {/* Natural Tones Footer with Sync indicator */}
       <footer className="h-10 md:h-11 bg-[#FAF9F6] border-t border-[#DCD5C8] px-3.5 sm:px-6 md:px-8 flex items-center justify-between text-[10px] sm:text-[11px] font-medium text-[#A89F91] shrink-0">
         <div className="truncate">
           &copy; 2026 {classRoom.schoolName} {classRoom.grade}학년 {classRoom.classNumber}반
@@ -552,7 +677,7 @@ export default function App() {
             title="Supabase 실시간 클라우드 연동 상태"
           >
             <span className={`w-1.5 h-1.5 rounded-full ${supabaseConfig.isEnabled && supabaseConfig.url ? 'bg-[#588157] animate-pulse' : 'bg-[#BC6C25]'}`} />
-            <span>{supabaseConfig.isEnabled && supabaseConfig.url ? '실시간 동기화' : '로컬 모드 (연동)'}</span>
+            <span>{supabaseConfig.isEnabled && supabaseConfig.url ? '실시간 동기화 ON' : '로컬 모드 (연동 가능)'}</span>
           </button>
         </div>
       </footer>
@@ -638,14 +763,13 @@ export default function App() {
           setSubmissionsMap(updatedMap);
           saveSubmissions(updatedMap);
 
-          if (supabaseConfig.isEnabled && supabaseConfig.url) {
-            upsertSubmissionsToSupabase(supabaseConfig, classRoom.id, asgId, [{
-              studentId,
-              status,
-              note,
-              updatedAt: nowIso,
-            }]);
-          }
+          // Realtime Push to Supabase & Google Sheets
+          triggerAutoSync(asgId, [{
+            studentId,
+            status,
+            note,
+            updatedAt: nowIso,
+          }], updatedMap[asgId]);
         }}
       />
 
