@@ -156,11 +156,14 @@ export const parseStudentRosterText = (rawText: string): Student[] => {
   let currentAutoNumber = 1;
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+    const rawLine = lines[i];
     // Skip header row if it contains '번호' or '이름'
-    if (i === 0 && (line.includes('번호') || line.includes('이름') || line.includes('성명'))) {
+    if (i === 0 && (rawLine.includes('번호') || rawLine.includes('이름') || rawLine.includes('성명'))) {
       continue;
     }
+
+    // Clean leading dots/parentheses from numbers like "1. 송다성" or "1) 송다성"
+    const line = rawLine.replace(/^([0-9]+)[\.\)\-\:\s]+/, '$1\t');
 
     // Split by tab, comma, or multiple spaces
     const parts = line.includes('\t') 
@@ -197,13 +200,16 @@ export const parseStudentRosterText = (rawText: string): Student[] => {
       }
     }
 
-    if (name) {
+    // Clean name from leftover numbers or symbols
+    const cleanName = name.replace(/^[0-9\.\)\-\:\s]+/, '').trim();
+
+    if (cleanName) {
       students.push({
-        id: `st-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        id: `st-${Date.now()}-${Math.random().toString(36).substr(2, 5)}-${i}`,
         number: num || currentAutoNumber,
-        name: name.replace(/[0-9]/g, '').trim() || name,
+        name: cleanName,
         gender,
-        groupNumber: groupNumber || Math.ceil(num / 4) || 1,
+        groupNumber: groupNumber || Math.ceil((num || currentAutoNumber) / 4) || 1,
         note,
       });
       currentAutoNumber = (num || currentAutoNumber) + 1;

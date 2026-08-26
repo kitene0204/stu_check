@@ -697,6 +697,7 @@ export default function App() {
         onClose={() => setIsRosterModalOpen(false)}
         students={students}
         onUpdateStudents={handleUpdateStudents}
+        onSaveStudents={handleUpdateStudents}
         onShowToast={showToast}
       />
 
