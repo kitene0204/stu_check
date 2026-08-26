@@ -2,13 +2,14 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Student, Assignment, ClassRoom, SupabaseConfig, GoogleSheetsConfig, SubmissionMap, SubmissionItem } from '../types';
 import { INITIAL_CLASS, INITIAL_STUDENTS, INITIAL_ASSIGNMENTS, INITIAL_SUBMISSION_MAP } from '../data/initialData';
 
-const STORAGE_KEYS = {
+export const STORAGE_KEYS = {
   CLASS: 'class_tracker_classroom',
   STUDENTS: 'class_tracker_students',
   ASSIGNMENTS: 'class_tracker_assignments',
   SUBMISSIONS: 'class_tracker_submissions',
   SUPABASE_CONFIG: 'class_tracker_supabase_config',
   SHEETS_CONFIG: 'class_tracker_sheets_config',
+  IS_INITIALIZED: 'class_tracker_initialized_flag',
 };
 
 let supabaseClient: SupabaseClient | null = null;
@@ -26,6 +27,8 @@ export const getSupabaseClient = (config?: SupabaseConfig): SupabaseClient | nul
   return supabaseClient;
 };
 
+// ================= LOCAL STORAGE LOAD / SAVE =================
+
 export const loadClassRoom = (): ClassRoom => {
   try {
     const data = localStorage.getItem(STORAGE_KEYS.CLASS);
@@ -38,6 +41,9 @@ export const loadClassRoom = (): ClassRoom => {
 export const saveClassRoom = (classRoom: ClassRoom): void => {
   try {
     localStorage.setItem(STORAGE_KEYS.CLASS, JSON.stringify(classRoom));
+    localStorage.setItem(STORAGE_KEYS.IS_INITIALIZED, 'true');
+    // Asynchronously save to server store
+    saveServerStoreData({ classRoom });
   } catch (e) {
     console.error(e);
   }
@@ -46,15 +52,24 @@ export const saveClassRoom = (classRoom: ClassRoom): void => {
 export const loadStudents = (): Student[] => {
   try {
     const data = localStorage.getItem(STORAGE_KEYS.STUDENTS);
-    return data ? JSON.parse(data) : INITIAL_STUDENTS;
+    if (data !== null) {
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
+    return INITIAL_STUDENTS;
   } catch {
     return INITIAL_STUDENTS;
   }
 };
 
-export const saveStudents = (students: Student[]): void => {
+export const saveStudents = (students: Student[], classId?: string): void => {
   try {
     localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(students));
+    localStorage.setItem(STORAGE_KEYS.IS_INITIALIZED, 'true');
+    // Asynchronously save to server store
+    saveRosterToServer(students, classId);
   } catch (e) {
     console.error(e);
   }
@@ -63,7 +78,11 @@ export const saveStudents = (students: Student[]): void => {
 export const loadAssignments = (): Assignment[] => {
   try {
     const data = localStorage.getItem(STORAGE_KEYS.ASSIGNMENTS);
-    return data ? JSON.parse(data) : INITIAL_ASSIGNMENTS;
+    if (data !== null) {
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) return parsed;
+    }
+    return INITIAL_ASSIGNMENTS;
   } catch {
     return INITIAL_ASSIGNMENTS;
   }
@@ -72,6 +91,9 @@ export const loadAssignments = (): Assignment[] => {
 export const saveAssignments = (assignments: Assignment[]): void => {
   try {
     localStorage.setItem(STORAGE_KEYS.ASSIGNMENTS, JSON.stringify(assignments));
+    localStorage.setItem(STORAGE_KEYS.IS_INITIALIZED, 'true');
+    // Asynchronously save to server store
+    saveServerStoreData({ assignments });
   } catch (e) {
     console.error(e);
   }
@@ -89,6 +111,9 @@ export const loadSubmissions = (): SubmissionMap => {
 export const saveSubmissions = (submissions: SubmissionMap): void => {
   try {
     localStorage.setItem(STORAGE_KEYS.SUBMISSIONS, JSON.stringify(submissions));
+    localStorage.setItem(STORAGE_KEYS.IS_INITIALIZED, 'true');
+    // Asynchronously save to server store
+    saveServerStoreData({ submissionsMap: submissions });
   } catch (e) {
     console.error(e);
   }
@@ -102,7 +127,7 @@ export const loadSupabaseConfig = (): SupabaseConfig => {
       if (parsed.url && parsed.anonKey) return parsed;
     }
     
-    // Check Vite Environment Variables (e.g. from Vercel deployment)
+    // Check Vite Environment Variables (if injected)
     const envUrl = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_SUPABASE_URL || '';
     const envKey = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_SUPABASE_ANON_KEY || '';
 
@@ -123,6 +148,8 @@ export const loadSupabaseConfig = (): SupabaseConfig => {
 export const saveSupabaseConfig = (config: SupabaseConfig): void => {
   try {
     localStorage.setItem(STORAGE_KEYS.SUPABASE_CONFIG, JSON.stringify(config));
+    // Asynchronously save to server store
+    saveSupabaseConfigToServer(config);
   } catch (e) {
     console.error(e);
   }
@@ -140,10 +167,96 @@ export const loadSheetsConfig = (): GoogleSheetsConfig => {
 export const saveSheetsConfig = (config: GoogleSheetsConfig): void => {
   try {
     localStorage.setItem(STORAGE_KEYS.SHEETS_CONFIG, JSON.stringify(config));
+    saveSheetsConfigToServer(config);
   } catch (e) {
     console.error(e);
   }
 };
+
+// ================= BACKEND SERVER STORE API HELPERS =================
+
+export interface ServerStoreBundle {
+  classRoom?: ClassRoom;
+  students?: Student[];
+  assignments?: Assignment[];
+  submissionsMap?: SubmissionMap;
+  supabaseConfig?: SupabaseConfig;
+  sheetsConfig?: GoogleSheetsConfig;
+  updatedAt?: string;
+}
+
+export const fetchServerStoreData = async (): Promise<ServerStoreBundle | null> => {
+  try {
+    const res = await fetch('/api/store');
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json && json.success && json.data) {
+      return json.data as ServerStoreBundle;
+    }
+  } catch (err) {
+    // Server might be starting up or in purely client context
+    console.warn('Could not reach backend /api/store:', err);
+  }
+  return null;
+};
+
+export const saveServerStoreData = async (data: Partial<ServerStoreBundle>): Promise<boolean> => {
+  try {
+    const res = await fetch('/api/store', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn('saveServerStoreData error:', err);
+    return false;
+  }
+};
+
+export const saveRosterToServer = async (students: Student[], classId?: string): Promise<boolean> => {
+  try {
+    const res = await fetch('/api/roster', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ students, classId }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn('saveRosterToServer error:', err);
+    return false;
+  }
+};
+
+export const saveSupabaseConfigToServer = async (config: SupabaseConfig): Promise<boolean> => {
+  try {
+    const res = await fetch('/api/config/supabase', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn('saveSupabaseConfigToServer error:', err);
+    return false;
+  }
+};
+
+export const saveSheetsConfigToServer = async (config: GoogleSheetsConfig): Promise<boolean> => {
+  try {
+    const res = await fetch('/api/config/sheets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn('saveSheetsConfigToServer error:', err);
+    return false;
+  }
+};
+
+// ================= ROSTER PARSER & FORMATTER =================
 
 /**
  * Parses raw copied table text (from Excel, Google Sheets, or plain tab/comma-separated text)

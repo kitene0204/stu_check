@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { 
   ClassRoom, 
@@ -42,7 +42,11 @@ import {
   loadSheetsConfig,
   saveSheetsConfig,
   loadSupabaseConfig,
-  saveSupabaseConfig
+  saveSupabaseConfig,
+  fetchServerStoreData,
+  saveServerStoreData,
+  saveRosterToServer,
+  saveSupabaseConfigToServer,
 } from './services/storageService';
 
 import {
@@ -51,13 +55,14 @@ import {
   upsertSubmissionsToSupabase,
   syncStudentsToSupabase,
   syncAssignmentsToSupabase,
+  syncFullClassBundleToSupabase,
   subscribeToSubmissions
 } from './services/supabaseService';
 
 import { syncToGoogleSheetsWebhook } from './services/googleSheetsService';
 
 export default function App() {
-  // State Initialization
+  // State Initialization from LocalStorage (Instant initial render)
   const [classRoom, setClassRoom] = useState<ClassRoom>(loadClassRoom);
   const [students, setStudents] = useState<Student[]>(loadStudents);
   const [assignments, setAssignments] = useState<Assignment[]>(loadAssignments);
@@ -94,8 +99,11 @@ export default function App() {
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage(null);
-    }, 2800);
+    }, 3000);
   }, []);
+
+  // Track initialization so we only load priority hierarchy once on mount
+  const isMountedRef = useRef(false);
 
   // Check for mobile QR sync parameters on load
   useEffect(() => {
@@ -121,15 +129,114 @@ export default function App() {
           setSheetsConfig(decoded.sheetsConfig);
           saveSheetsConfig(decoded.sheetsConfig);
         }
-        showToast('📱 데스크탑 학급 데이터 및 연동 설정이 스마트폰에 동기화되었습니다!');
+        showToast('📱 데스크탑 학급 데이터 및 연동 설정이 스마트폰에 즉시 동기화되었습니다!');
         
-        // Clean URL
+        // Clean URL parameter
         window.history.replaceState({}, document.title, window.location.pathname);
       }
     } catch (e) {
       console.error('Failed to parse sync data from URL', e);
     }
   }, [showToast]);
+
+  // Primary Data Source Priority on Mount:
+  // [Priority 1: Supabase Cloud DB] -> [Priority 2: Backend Server Store] -> [Priority 3: LocalStorage]
+  useEffect(() => {
+    if (isMountedRef.current) return;
+    isMountedRef.current = true;
+
+    const initializeDataSources = async () => {
+      let loadedFromSupabase = false;
+
+      // 1. Try Supabase Cloud DB first if configured
+      if (supabaseConfig.isEnabled && supabaseConfig.url && supabaseConfig.anonKey) {
+        try {
+          setSyncState('syncing');
+          const remote = await fetchSupabaseData(supabaseConfig, classRoom.id);
+
+          if (remote.students && remote.students.length > 0) {
+            setStudents(remote.students);
+            saveStudents(remote.students, classRoom.id);
+            loadedFromSupabase = true;
+          }
+
+          if (remote.assignments && remote.assignments.length > 0) {
+            setAssignments(remote.assignments);
+            saveAssignments(remote.assignments);
+            setActiveAssignmentId(prev => prev || remote.assignments[0].id);
+          }
+
+          if (remote.submissionsMap && Object.keys(remote.submissionsMap).length > 0) {
+            setSubmissionsMap(prev => {
+              const merged = { ...prev, ...remote.submissionsMap };
+              saveSubmissions(merged);
+              return merged;
+            });
+          }
+
+          if (remote.classRoom) {
+            setClassRoom(prev => {
+              const merged = { ...prev, ...remote.classRoom };
+              saveClassRoom(merged);
+              return merged;
+            });
+          }
+
+          if (loadedFromSupabase) {
+            setSyncState('synced');
+            setTimeout(() => setSyncState('idle'), 2500);
+            return;
+          }
+        } catch (err) {
+          console.warn('Supabase initial fetch warning:', err);
+        }
+      }
+
+      // 2. Try Server Backend Store (/api/store) if Supabase had no roster
+      try {
+        const serverData = await fetchServerStoreData();
+        if (serverData) {
+          if (serverData.students && Array.isArray(serverData.students) && serverData.students.length > 0) {
+            setStudents(serverData.students);
+            localStorage.setItem('class_tracker_students', JSON.stringify(serverData.students));
+          }
+          if (serverData.classRoom) {
+            setClassRoom(serverData.classRoom);
+            localStorage.setItem('class_tracker_classroom', JSON.stringify(serverData.classRoom));
+          }
+          if (serverData.assignments && Array.isArray(serverData.assignments) && serverData.assignments.length > 0) {
+            setAssignments(serverData.assignments);
+            localStorage.setItem('class_tracker_assignments', JSON.stringify(serverData.assignments));
+            setActiveAssignmentId(prev => prev || serverData.assignments![0].id);
+          }
+          if (serverData.submissionsMap && Object.keys(serverData.submissionsMap).length > 0) {
+            setSubmissionsMap(prev => {
+              const merged = { ...prev, ...serverData.submissionsMap };
+              localStorage.setItem('class_tracker_submissions', JSON.stringify(merged));
+              return merged;
+            });
+          }
+          if (serverData.supabaseConfig && serverData.supabaseConfig.url && !supabaseConfig.url) {
+            setSupabaseConfig(serverData.supabaseConfig);
+            localStorage.setItem('class_tracker_supabase_config', JSON.stringify(serverData.supabaseConfig));
+          }
+          if (serverData.sheetsConfig && !sheetsConfig.spreadsheetUrl && !sheetsConfig.webhookUrl) {
+            setSheetsConfig(serverData.sheetsConfig);
+            localStorage.setItem('class_tracker_sheets_config', JSON.stringify(serverData.sheetsConfig));
+          }
+          setSyncState('synced');
+          setTimeout(() => setSyncState('idle'), 2000);
+          return;
+        }
+      } catch (err) {
+        console.warn('Backend store fetch error:', err);
+      }
+
+      setSyncState('idle');
+    };
+
+    initializeDataSources();
+  }, [supabaseConfig, classRoom.id, sheetsConfig]);
 
   // Active assignment
   const activeAssignment = useMemo(() => {
@@ -142,7 +249,7 @@ export default function App() {
     return submissionsMap[activeAssignment.id] || {};
   }, [submissionsMap, activeAssignment?.id]);
 
-  // Realtime Supabase Sync Setup
+  // Realtime Supabase Sync Subscription
   useEffect(() => {
     if (!supabaseConfig.isEnabled || !supabaseConfig.url || !supabaseConfig.anonKey) {
       return;
@@ -151,41 +258,7 @@ export default function App() {
     const client = initSupabase(supabaseConfig);
     if (!client) return;
 
-    // Initial fetch from cloud
-    const loadRemote = async () => {
-      try {
-        setSyncState('syncing');
-        const data = await fetchSupabaseData(supabaseConfig, classRoom.id);
-        if (data.students.length > 0) {
-          setStudents(data.students);
-          saveStudents(data.students);
-        }
-        if (data.assignments.length > 0) {
-          setAssignments(data.assignments);
-          saveAssignments(data.assignments);
-          if (!activeAssignmentId && data.assignments[0]) {
-            setActiveAssignmentId(data.assignments[0].id);
-          }
-        }
-        if (Object.keys(data.submissionsMap).length > 0) {
-          setSubmissionsMap(prev => {
-            const merged = { ...prev, ...data.submissionsMap };
-            saveSubmissions(merged);
-            return merged;
-          });
-        }
-        setSyncState('synced');
-        setTimeout(() => setSyncState('idle'), 2500);
-      } catch (err) {
-        console.error('Supabase initial fetch failed:', err);
-        setSyncState('error');
-        setTimeout(() => setSyncState('idle'), 2500);
-      }
-    };
-
-    loadRemote();
-
-    // Subscribe to realtime changes
+    // Subscribe to realtime changes for submissions and roster updates
     const channel = subscribeToSubmissions(
       supabaseConfig,
       classRoom.id,
@@ -215,6 +288,13 @@ export default function App() {
 
         setSyncState('synced');
         setTimeout(() => setSyncState('idle'), 2000);
+      },
+      (newRemoteStudents) => {
+        if (Array.isArray(newRemoteStudents) && newRemoteStudents.length > 0) {
+          setStudents(newRemoteStudents);
+          saveStudents(newRemoteStudents, classRoom.id);
+          showToast(`⚡ 다른 기기에서 학생 명단(${newRemoteStudents.length}명)이 실시간 동기화되었습니다.`);
+        }
       }
     );
 
@@ -223,7 +303,7 @@ export default function App() {
         client.removeChannel(channel);
       }
     };
-  }, [supabaseConfig, classRoom.id, activeAssignmentId]);
+  }, [supabaseConfig, classRoom.id, showToast]);
 
   // Realtime Automatic Push Sync Helper
   const triggerAutoSync = useCallback(async (
@@ -231,50 +311,56 @@ export default function App() {
     itemsToSync: { studentId: string; status: SubmissionStatus; note?: string; updatedAt: string }[],
     updatedSubmissionsForActive?: Record<string, SubmissionItem>
   ) => {
-    // Show quick subtle syncing state
     setSyncState('syncing');
-
-    let supabaseOk = false;
-    let sheetsOk = false;
 
     // 1. Supabase Cloud Sync
     if (supabaseConfig.isEnabled && supabaseConfig.url) {
       try {
         await upsertSubmissionsToSupabase(supabaseConfig, classRoom.id, asgId, itemsToSync);
-        supabaseOk = true;
       } catch (err) {
         console.error('Auto sync to Supabase failed:', err);
       }
     }
 
     // 2. Google Sheets Webhook Sync
-    if (sheetsConfig.autoSync && sheetsConfig.webhookUrl && activeAssignment) {
+    if (sheetsConfig.autoSyncEnabled && sheetsConfig.webhookUrl && activeAssignment) {
       try {
         const subsToUse = updatedSubmissionsForActive || currentSubmissions;
         await syncToGoogleSheetsWebhook(sheetsConfig, classRoom, activeAssignment, students, subsToUse);
-        sheetsOk = true;
       } catch (err) {
         console.error('Auto sync to Google Sheets failed:', err);
       }
     }
 
-    // Set synced status
+    // 3. Server store persistence
+    saveServerStoreData({
+      classRoom,
+      students,
+      assignments,
+      submissionsMap,
+      supabaseConfig,
+      sheetsConfig,
+    });
+
     setSyncState('synced');
     setTimeout(() => {
       setSyncState('idle');
     }, 2200);
-  }, [supabaseConfig, sheetsConfig, classRoom, activeAssignment, students, currentSubmissions]);
+  }, [supabaseConfig, sheetsConfig, classRoom, activeAssignment, students, currentSubmissions, assignments, submissionsMap]);
 
   // Manual Full Sync Button Action
   const handleTriggerManualSync = useCallback(async () => {
     setSyncState('syncing');
-    showToast('🔄 클라우드 및 구글 시트 데이터 동기화 중...');
+    showToast('🔄 클라우드, 서버 및 구글 시트 전체 동기화 중...');
 
     try {
       let syncCount = 0;
 
       // 1. Supabase Sync (Download & Upload latest)
       if (supabaseConfig.isEnabled && supabaseConfig.url) {
+        // Upload students roster to Supabase
+        await syncStudentsToSupabase(supabaseConfig, classRoom.id, students);
+
         // Upload current active assignment submissions
         if (activeAssignment?.id) {
           const currentItems = students.map(st => {
@@ -292,6 +378,10 @@ export default function App() {
 
         // Fetch remote updates
         const remoteData = await fetchSupabaseData(supabaseConfig, classRoom.id);
+        if (remoteData.students && remoteData.students.length > 0) {
+          setStudents(remoteData.students);
+          saveStudents(remoteData.students, classRoom.id);
+        }
         if (Object.keys(remoteData.submissionsMap).length > 0) {
           setSubmissionsMap(prev => {
             const merged = { ...prev, ...remoteData.submissionsMap };
@@ -308,18 +398,29 @@ export default function App() {
         syncCount++;
       }
 
-      // Local storage refresh guarantee
+      // 3. Save to backend server store & LocalStorage
       saveClassRoom(classRoom);
-      saveStudents(students);
+      saveStudents(students, classRoom.id);
       saveAssignments(assignments);
       saveSubmissions(submissionsMap);
+      saveSupabaseConfig(supabaseConfig);
+      saveSheetsConfig(sheetsConfig);
+
+      await saveServerStoreData({
+        classRoom,
+        students,
+        assignments,
+        submissionsMap,
+        supabaseConfig,
+        sheetsConfig,
+      });
 
       setSyncState('synced');
 
       if (syncCount > 0) {
-        showToast('✅ 구글 시트 & Supabase & 로컬 데이터 동기화 완료!');
+        showToast('✅ Supabase 클라우드, 서버 및 로컬 데이터 동기화 완료!');
       } else {
-        showToast('✅ 로컬 데이터 저장 및 동기화 완료! (클라우드 연동 시 자동 실시간 백업)');
+        showToast('✅ 서버 및 로컬 저장소 동기화 완료!');
       }
 
       setTimeout(() => {
@@ -368,14 +469,32 @@ export default function App() {
   const handleUpdateClassRoom = (updated: ClassRoom) => {
     setClassRoom(updated);
     saveClassRoom(updated);
-  };
-
-  const handleUpdateStudents = (updatedStudents: Student[]) => {
-    setStudents(updatedStudents);
-    saveStudents(updatedStudents);
 
     if (supabaseConfig.isEnabled && supabaseConfig.url) {
-      syncStudentsToSupabase(supabaseConfig, classRoom.id, updatedStudents);
+      syncFullClassBundleToSupabase(supabaseConfig, updated, students, assignments, submissionsMap);
+    }
+  };
+
+  const handleUpdateStudents = async (updatedStudents: Student[]) => {
+    // 1. Instant local state update for immediate UI re-rendering
+    setStudents(updatedStudents);
+    
+    // 2. Persist to LocalStorage and Server store
+    saveStudents(updatedStudents, classRoom.id);
+
+    // 3. Sync to Supabase if configured
+    if (supabaseConfig.isEnabled && supabaseConfig.url) {
+      try {
+        setSyncState('syncing');
+        const ok = await syncStudentsToSupabase(supabaseConfig, classRoom.id, updatedStudents);
+        if (ok) {
+          showToast(`⚡ Supabase 클라우드에 ${updatedStudents.length}명의 명단이 저장되었습니다!`);
+        }
+        setSyncState('synced');
+        setTimeout(() => setSyncState('idle'), 2000);
+      } catch (e) {
+        console.error('Failed to sync students to Supabase:', e);
+      }
     }
   };
 
@@ -548,9 +667,40 @@ export default function App() {
     showToast('✨ 전체 학생이 제출 완료 처리되었습니다.');
   };
 
-  const handleSaveSupabaseConfig = (cfg: SupabaseConfig) => {
+  const handleSaveSupabaseConfig = async (cfg: SupabaseConfig) => {
     setSupabaseConfig(cfg);
     saveSupabaseConfig(cfg);
+
+    if (cfg.isEnabled && cfg.url && cfg.anonKey) {
+      setSyncState('syncing');
+      try {
+        // Upload current state to Supabase
+        await syncFullClassBundleToSupabase(cfg, classRoom, students, assignments, submissionsMap);
+        
+        // Also fetch any existing remote data
+        const remote = await fetchSupabaseData(cfg, classRoom.id);
+        if (remote.students && remote.students.length > 0) {
+          setStudents(remote.students);
+          saveStudents(remote.students, classRoom.id);
+        }
+        if (remote.assignments && remote.assignments.length > 0) {
+          setAssignments(remote.assignments);
+          saveAssignments(remote.assignments);
+        }
+        if (remote.submissionsMap && Object.keys(remote.submissionsMap).length > 0) {
+          setSubmissionsMap(prev => ({ ...prev, ...remote.submissionsMap }));
+        }
+
+        setSyncState('synced');
+        showToast('⚡ Supabase 설정 저장 및 전체 데이터 동기화가 완료되었습니다!');
+      } catch (err) {
+        console.error('Supabase save error:', err);
+        setSyncState('error');
+      }
+      setTimeout(() => setSyncState('idle'), 2500);
+    } else {
+      showToast('💾 로컬 스토리지 모드로 저장되었습니다.');
+    }
   };
 
   const handleSaveSheetsConfig = (cfg: GoogleSheetsConfig) => {
@@ -558,12 +708,12 @@ export default function App() {
     saveSheetsConfig(cfg);
   };
 
-  const handleRestoreAllData = (restored: { classRoom: ClassRoom; students: Student[]; assignments: Assignment[]; submissionsMap: SubmissionMap }) => {
+  const handleRestoreAllData = async (restored: { classRoom: ClassRoom; students: Student[]; assignments: Assignment[]; submissionsMap: SubmissionMap }) => {
     setClassRoom(restored.classRoom);
     saveClassRoom(restored.classRoom);
 
     setStudents(restored.students);
-    saveStudents(restored.students);
+    saveStudents(restored.students, restored.classRoom.id);
 
     setAssignments(restored.assignments);
     saveAssignments(restored.assignments);
@@ -573,6 +723,27 @@ export default function App() {
 
     if (restored.assignments.length > 0) {
       setActiveAssignmentId(restored.assignments[0].id);
+    }
+
+    // Save to server
+    await saveServerStoreData({
+      classRoom: restored.classRoom,
+      students: restored.students,
+      assignments: restored.assignments,
+      submissionsMap: restored.submissionsMap,
+      supabaseConfig,
+      sheetsConfig,
+    });
+
+    // Save to Supabase if connected
+    if (supabaseConfig.isEnabled && supabaseConfig.url) {
+      await syncFullClassBundleToSupabase(
+        supabaseConfig,
+        restored.classRoom,
+        restored.students,
+        restored.assignments,
+        restored.submissionsMap
+      );
     }
   };
 
@@ -724,10 +895,6 @@ export default function App() {
         onClose={() => setIsSupabaseModalOpen(false)}
         config={supabaseConfig}
         onSaveConfig={handleSaveSupabaseConfig}
-        classRoomId={classRoom.id}
-        students={students}
-        assignments={assignments}
-        submissionsMap={submissionsMap}
         onShowToast={showToast}
       />
 

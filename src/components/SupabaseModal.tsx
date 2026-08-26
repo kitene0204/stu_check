@@ -55,7 +55,9 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({
     onClose();
   };
 
-  const sqlSchema = `-- 초등 학급 도우미 Supabase 테이블 생성 스크립트
+  const sqlSchema = `-- 초등 학급 도우미 Supabase 완벽 연동 SQL 스크립트 (SQL Editor에 복사 후 Run 실행)
+
+-- 1. 제출 현황 테이블
 CREATE TABLE IF NOT EXISTS class_submissions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   class_id TEXT NOT NULL,
@@ -67,8 +69,33 @@ CREATE TABLE IF NOT EXISTS class_submissions (
   UNIQUE(class_id, assignment_id, student_id)
 );
 
--- 실시간 Realtime 활성화
-ALTER PUBLICATION supabase_realtime ADD TABLE class_submissions;`;
+-- 2. 학생 명단 테이블
+CREATE TABLE IF NOT EXISTS class_students (
+  id TEXT PRIMARY KEY,
+  class_id TEXT NOT NULL,
+  student_id TEXT,
+  number INT NOT NULL,
+  name TEXT NOT NULL,
+  gender TEXT DEFAULT 'M',
+  group_number INT DEFAULT 1,
+  note TEXT,
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(class_id, id)
+);
+
+-- 3. 학급 메타데이터 및 전체 명단 백업 테이블
+CREATE TABLE IF NOT EXISTS class_metadata (
+  class_id TEXT PRIMARY KEY,
+  classroom_data JSONB,
+  students JSONB,
+  assignments JSONB,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 4. 실시간(Realtime) 복제 활성화
+ALTER PUBLICATION supabase_realtime ADD TABLE class_submissions;
+ALTER PUBLICATION supabase_realtime ADD TABLE class_metadata;
+ALTER PUBLICATION supabase_realtime ADD TABLE class_students;`;
 
   const handleCopySql = () => {
     navigator.clipboard.writeText(sqlSchema);
