@@ -55,10 +55,10 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({
     onClose();
   };
 
-  const sqlSchema = `-- 초등 학급 도우미 Supabase 완벽 연동 SQL 스크립트 (SQL Editor에 복사 후 Run 실행)
+  const sqlSchema = `-- 초등 학급 도우미 Supabase 완벽 연동 SQL 스크립트 (SQL Editor에 전체 복사 후 [Run] 클릭)
 
--- 1. 제출 현황 테이블
-CREATE TABLE IF NOT EXISTS class_submissions (
+-- 1. 제출 현황 테이블 생성
+CREATE TABLE IF NOT EXISTS public.class_submissions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   class_id TEXT NOT NULL,
   assignment_id TEXT NOT NULL,
@@ -69,8 +69,8 @@ CREATE TABLE IF NOT EXISTS class_submissions (
   UNIQUE(class_id, assignment_id, student_id)
 );
 
--- 2. 학생 명단 테이블
-CREATE TABLE IF NOT EXISTS class_students (
+-- 2. 학생 명단 테이블 생성
+CREATE TABLE IF NOT EXISTS public.class_students (
   id TEXT PRIMARY KEY,
   class_id TEXT NOT NULL,
   student_id TEXT,
@@ -83,8 +83,8 @@ CREATE TABLE IF NOT EXISTS class_students (
   UNIQUE(class_id, id)
 );
 
--- 3. 학급 메타데이터 및 전체 명단 백업 테이블
-CREATE TABLE IF NOT EXISTS class_metadata (
+-- 3. 학급 메타데이터 및 전체 명단 백업 테이블 생성
+CREATE TABLE IF NOT EXISTS public.class_metadata (
   class_id TEXT PRIMARY KEY,
   classroom_data JSONB,
   students JSONB,
@@ -92,15 +92,37 @@ CREATE TABLE IF NOT EXISTS class_metadata (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 4. 실시간(Realtime) 복제 활성화
-ALTER PUBLICATION supabase_realtime ADD TABLE class_submissions;
-ALTER PUBLICATION supabase_realtime ADD TABLE class_metadata;
-ALTER PUBLICATION supabase_realtime ADD TABLE class_students;
+-- 4. 익명/공개(anon / authenticated) 모든 읽기, 쓰기, 수정 권한 허용
+GRANT ALL ON TABLE public.class_submissions TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.class_students TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.class_metadata TO anon, authenticated, service_role;
 
--- 5. Row Level Security 정책 해제 (인증 없이 모든 기기/스마트폰 자유로운 동기화)
-ALTER TABLE class_submissions DISABLE ROW LEVEL SECURITY;
-ALTER TABLE class_students DISABLE ROW LEVEL SECURITY;
-ALTER TABLE class_metadata DISABLE ROW LEVEL SECURITY;`;
+-- 5. Row Level Security 정책 해제 (기기 간 실시간 자유 동기화)
+ALTER TABLE public.class_submissions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.class_students DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.class_metadata DISABLE ROW LEVEL SECURITY;
+
+-- 6. 실시간(Realtime) 복제 활성화 (이미 추가되어 있어도 오류 방지)
+DO $$
+BEGIN
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.class_submissions;
+  EXCEPTION WHEN duplicate_object THEN
+    NULL;
+  END;
+
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.class_students;
+  EXCEPTION WHEN duplicate_object THEN
+    NULL;
+  END;
+
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.class_metadata;
+  EXCEPTION WHEN duplicate_object THEN
+    NULL;
+  END;
+END $$;`;
 
   const handleCopySql = () => {
     navigator.clipboard.writeText(sqlSchema);

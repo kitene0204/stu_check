@@ -139,9 +139,17 @@ export const loadSupabaseConfig = (): SupabaseConfig => {
       };
     }
 
-    return { url: '', anonKey: '', isEnabled: false };
+    return {
+      url: 'https://zrovysdgefsrlvmmiuha.supabase.co',
+      anonKey: 'sb_publishable_5Rd9NJicBZ6EddIEtCA7Xw_f0_9UYFW',
+      isEnabled: true
+    };
   } catch {
-    return { url: '', anonKey: '', isEnabled: false };
+    return {
+      url: 'https://zrovysdgefsrlvmmiuha.supabase.co',
+      anonKey: 'sb_publishable_5Rd9NJicBZ6EddIEtCA7Xw_f0_9UYFW',
+      isEnabled: true
+    };
   }
 };
 

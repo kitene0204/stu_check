@@ -9,5 +9,10 @@
     }
   ],
   "classId": "class-6-1-2026",
-  "updatedAt": "2026-08-26T07:48:10.163Z"
+  "updatedAt": "2026-08-26T08:19:29.901Z",
+  "supabaseConfig": {
+    "url": "https://zrovysdgefsrlvmmiuha.supabase.co",
+    "anonKey": "sb_publishable_5Rd9NJicBZ6EddIEtCA7Xw_f0_9UYFW",
+    "isEnabled": true
+  }
 }
