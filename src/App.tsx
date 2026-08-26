@@ -139,9 +139,9 @@ export default function App() {
   }, [showToast]);
 
   // Primary Data Source Sync on Mount:
-  // 1. Fetch Server Persistent Store (/api/store) so ANY browser immediately gets active roster & state
-  // 2. If server store is empty, seed it with current local state
-  // 3. Connect to Server-Sent Events (SSE /api/events) for real-time live synchronization
+  // 1. Fetch Supabase Cloud DB as primary source of truth
+  // 2. Fetch Server Persistent Store (/api/store)
+  // 3. Connect to Realtime channels (Supabase Realtime + SSE) for live synchronization
   useEffect(() => {
     if (isInitializedRef.current) return;
     isInitializedRef.current = true;
@@ -149,91 +149,73 @@ export default function App() {
     const initializeDataSources = async () => {
       setSyncState('syncing');
 
-      let currentSupabaseCfg = supabaseConfig;
-      let currentClassId = classRoom.id;
+      const currentSupabaseCfg = supabaseConfig;
+      const currentClassId = classRoom.id;
 
-      try {
-        const serverData = await fetchServerStoreData();
-        if (serverData && (serverData.students || serverData.classRoom)) {
-          if (serverData.students && Array.isArray(serverData.students) && serverData.students.length > 0) {
-            setStudents(serverData.students);
-            localStorage.setItem('class_tracker_students', JSON.stringify(serverData.students));
-          }
-          if (serverData.classRoom) {
-            setClassRoom(serverData.classRoom);
-            currentClassId = serverData.classRoom.id;
-            localStorage.setItem('class_tracker_classroom', JSON.stringify(serverData.classRoom));
-          }
-          if (serverData.assignments && Array.isArray(serverData.assignments) && serverData.assignments.length > 0) {
-            setAssignments(serverData.assignments);
-            localStorage.setItem('class_tracker_assignments', JSON.stringify(serverData.assignments));
-            setActiveAssignmentId(prev => prev || serverData.assignments![0].id);
-          }
-          if (serverData.submissionsMap && Object.keys(serverData.submissionsMap).length > 0) {
-            setSubmissionsMap(prev => {
-              const merged = { ...prev, ...serverData.submissionsMap };
-              localStorage.setItem('class_tracker_submissions', JSON.stringify(merged));
-              return merged;
-            });
-          }
-          if (serverData.supabaseConfig && serverData.supabaseConfig.url && serverData.supabaseConfig.anonKey) {
-            currentSupabaseCfg = serverData.supabaseConfig;
-            setSupabaseConfig(serverData.supabaseConfig);
-            localStorage.setItem('class_tracker_supabase_config', JSON.stringify(serverData.supabaseConfig));
-          }
-          if (serverData.sheetsConfig && (serverData.sheetsConfig.spreadsheetUrl || serverData.sheetsConfig.webhookUrl)) {
-            setSheetsConfig(serverData.sheetsConfig);
-            localStorage.setItem('class_tracker_sheets_config', JSON.stringify(serverData.sheetsConfig));
-          }
-        } else {
-          // First time initialization: seed server store with current state
-          await saveServerStoreData({
-            classRoom,
-            students,
-            assignments,
-            submissionsMap,
-            supabaseConfig,
-            sheetsConfig,
-          });
-        }
-      } catch (err) {
-        console.warn('Backend store initialization warning:', err);
-      }
-
-      // 2. Fetch Supabase Cloud DB if configured
+      // 1. Fetch Supabase Cloud DB first (Master cloud database across all devices)
       if (currentSupabaseCfg.isEnabled && currentSupabaseCfg.url && currentSupabaseCfg.anonKey) {
         try {
           const remote = await fetchSupabaseData(currentSupabaseCfg, currentClassId);
 
-          if (remote.students && remote.students.length > 0) {
-            setStudents(remote.students);
-            saveStudents(remote.students, currentClassId);
-          }
+          if (remote.hasRemoteData) {
+            if (remote.students && Array.isArray(remote.students)) {
+              setStudents(remote.students);
+              localStorage.setItem('class_tracker_students', JSON.stringify(remote.students));
+            }
 
-          if (remote.assignments && remote.assignments.length > 0) {
-            setAssignments(remote.assignments);
-            saveAssignments(remote.assignments);
-            setActiveAssignmentId(prev => prev || remote.assignments[0].id);
-          }
+            if (remote.assignments && Array.isArray(remote.assignments)) {
+              setAssignments(remote.assignments);
+              localStorage.setItem('class_tracker_assignments', JSON.stringify(remote.assignments));
+              if (remote.assignments.length > 0) {
+                setActiveAssignmentId(remote.assignments[0].id);
+              } else {
+                setActiveAssignmentId('');
+              }
+            }
 
-          if (remote.submissionsMap && Object.keys(remote.submissionsMap).length > 0) {
-            setSubmissionsMap(prev => {
-              const merged = { ...prev, ...remote.submissionsMap };
-              saveSubmissions(merged);
-              return merged;
-            });
-          }
+            if (remote.submissionsMap) {
+              setSubmissionsMap(remote.submissionsMap);
+              localStorage.setItem('class_tracker_submissions', JSON.stringify(remote.submissionsMap));
+            }
 
-          if (remote.classRoom) {
-            setClassRoom(prev => {
-              const merged = { ...prev, ...remote.classRoom };
-              saveClassRoom(merged);
-              return merged;
-            });
+            if (remote.classRoom) {
+              setClassRoom(prev => {
+                const merged = { ...prev, ...remote.classRoom };
+                localStorage.setItem('class_tracker_classroom', JSON.stringify(merged));
+                return merged;
+              });
+            }
           }
         } catch (err) {
           console.warn('Supabase initial fetch warning:', err);
         }
+      }
+
+      // 2. Fetch Server Store backup
+      try {
+        const serverData = await fetchServerStoreData();
+        if (serverData && (serverData.students || serverData.classRoom)) {
+          if (!localStorage.getItem('class_tracker_initialized_flag')) {
+            if (serverData.students && Array.isArray(serverData.students) && serverData.students.length > 0) {
+              setStudents(serverData.students);
+              localStorage.setItem('class_tracker_students', JSON.stringify(serverData.students));
+            }
+            if (serverData.classRoom) {
+              setClassRoom(serverData.classRoom);
+              localStorage.setItem('class_tracker_classroom', JSON.stringify(serverData.classRoom));
+            }
+            if (serverData.assignments && Array.isArray(serverData.assignments)) {
+              setAssignments(serverData.assignments);
+              localStorage.setItem('class_tracker_assignments', JSON.stringify(serverData.assignments));
+            }
+            if (serverData.submissionsMap) {
+              setSubmissionsMap(serverData.submissionsMap);
+              localStorage.setItem('class_tracker_submissions', JSON.stringify(serverData.submissionsMap));
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Backend store initialization warning:', err);
       }
 
       setSyncState('synced');
@@ -368,7 +350,7 @@ export default function App() {
     const client = initSupabase(supabaseConfig);
     if (!client) return;
 
-    // Subscribe to realtime changes for submissions and roster updates
+    // Subscribe to realtime changes for submissions, roster, and assignments
     const channel = subscribeToSubmissions(
       supabaseConfig,
       classRoom.id,
@@ -401,17 +383,87 @@ export default function App() {
       },
       (newRemoteStudents) => {
         if (Array.isArray(newRemoteStudents) && newRemoteStudents.length > 0) {
-          setStudents(newRemoteStudents);
-          saveStudents(newRemoteStudents, classRoom.id);
+          setStudents(prev => {
+            if (JSON.stringify(prev) !== JSON.stringify(newRemoteStudents)) {
+              saveStudents(newRemoteStudents, classRoom.id);
+              return newRemoteStudents;
+            }
+            return prev;
+          });
           showToast(`⚡ 다른 기기에서 학생 명단(${newRemoteStudents.length}명)이 실시간 동기화되었습니다.`);
+        }
+      },
+      (newRemoteAssignments) => {
+        if (Array.isArray(newRemoteAssignments)) {
+          setAssignments(prev => {
+            if (JSON.stringify(prev) !== JSON.stringify(newRemoteAssignments)) {
+              saveAssignments(newRemoteAssignments);
+              return newRemoteAssignments;
+            }
+            return prev;
+          });
+          setActiveAssignmentId(prev => {
+            if (newRemoteAssignments.some(a => a.id === prev)) return prev;
+            return newRemoteAssignments[0]?.id || '';
+          });
+        }
+      },
+      (newRemoteClassRoom) => {
+        if (newRemoteClassRoom) {
+          setClassRoom(prev => {
+            const merged = { ...prev, ...newRemoteClassRoom };
+            saveClassRoom(merged);
+            return merged;
+          });
         }
       }
     );
+
+    // Periodic Cloud Sync Interval (Every 3.5 seconds) for guaranteed cross-browser freshness
+    const supabasePollInterval = setInterval(async () => {
+      try {
+        const remote = await fetchSupabaseData(supabaseConfig, classRoom.id);
+        if (remote.hasRemoteData) {
+          if (remote.students && Array.isArray(remote.students)) {
+            setStudents(prev => {
+              if (JSON.stringify(prev) !== JSON.stringify(remote.students)) {
+                saveStudents(remote.students, classRoom.id);
+                return remote.students;
+              }
+              return prev;
+            });
+          }
+          if (remote.assignments && Array.isArray(remote.assignments)) {
+            setAssignments(prev => {
+              if (JSON.stringify(prev) !== JSON.stringify(remote.assignments)) {
+                saveAssignments(remote.assignments);
+                return remote.assignments;
+              }
+              return prev;
+            });
+          }
+          if (remote.submissionsMap && Object.keys(remote.submissionsMap).length > 0) {
+            setSubmissionsMap(prev => {
+              const prevStr = JSON.stringify(prev);
+              const merged = { ...prev, ...remote.submissionsMap };
+              if (prevStr !== JSON.stringify(merged)) {
+                saveSubmissions(merged);
+                return merged;
+              }
+              return prev;
+            });
+          }
+        }
+      } catch (e) {
+        // silent
+      }
+    }, 3500);
 
     return () => {
       if (channel && client) {
         client.removeChannel(channel);
       }
+      clearInterval(supabasePollInterval);
     };
   }, [supabaseConfig, classRoom.id, showToast]);
 

@@ -1,18 +1,58 @@
 {
+  "classRoom": {
+    "id": "class-6-1-2026",
+    "schoolName": "전주삼천초등학교",
+    "grade": 6,
+    "classNumber": 1,
+    "academicYear": 2026,
+    "teacherName": "김선생님"
+  },
   "students": [
     {
       "id": "st-01",
       "number": 1,
-      "name": "강민준",
+      "name": "이창민",
       "gender": "M",
-      "groupNumber": 1
+      "groupNumber": 1,
+      "note": ""
+    },
+    {
+      "id": "st-02",
+      "number": 2,
+      "name": "강경욱",
+      "gender": "M",
+      "groupNumber": 1,
+      "note": ""
     }
   ],
-  "classId": "class-6-1-2026",
-  "updatedAt": "2026-08-26T08:19:29.901Z",
+  "assignments": [
+    {
+      "id": "asg-test",
+      "classId": "class-6-1-2026",
+      "title": "Test",
+      "category": "과제",
+      "dueDate": "2026-08-26",
+      "description": "",
+      "createdAt": "2026-08-26T08:35:24.470Z"
+    }
+  ],
+  "submissionsMap": {
+    "asg-test": {
+      "st-01": {
+        "status": "pending"
+      },
+      "st-02": {
+        "status": "pending"
+      }
+    }
+  },
   "supabaseConfig": {
     "url": "https://zrovysdgefsrlvmmiuha.supabase.co",
     "anonKey": "sb_publishable_5Rd9NJicBZ6EddIEtCA7Xw_f0_9UYFW",
     "isEnabled": true
-  }
+  },
+  "sheetsConfig": {
+    "autoSyncEnabled": true
+  },
+  "updatedAt": "2026-08-26T08:35:24.471Z"
 }

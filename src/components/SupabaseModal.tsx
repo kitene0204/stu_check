@@ -97,10 +97,19 @@ GRANT ALL ON TABLE public.class_submissions TO anon, authenticated, service_role
 GRANT ALL ON TABLE public.class_students TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.class_metadata TO anon, authenticated, service_role;
 
--- 5. Row Level Security 정책 해제 (기기 간 실시간 자유 동기화)
+-- 5. Row Level Security 정책 해제 및 무조건 허용 정책 생성 (어떤 브라우저/스마트폰이든 즉시 동기화)
 ALTER TABLE public.class_submissions DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.class_students DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.class_metadata DISABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public All submissions" ON public.class_submissions;
+CREATE POLICY "Public All submissions" ON public.class_submissions FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public All students" ON public.class_students;
+CREATE POLICY "Public All students" ON public.class_students FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public All metadata" ON public.class_metadata;
+CREATE POLICY "Public All metadata" ON public.class_metadata FOR ALL USING (true) WITH CHECK (true);
 
 -- 6. 실시간(Realtime) 복제 활성화 (이미 추가되어 있어도 오류 방지)
 DO $$

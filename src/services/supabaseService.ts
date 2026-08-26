@@ -41,18 +41,20 @@ export const fetchSupabaseData = async (
   assignments: Assignment[];
   submissionsMap: SubmissionMap;
   classRoom?: Partial<ClassRoom>;
+  hasRemoteData: boolean;
 }> => {
   const client = initSupabase(config);
   if (!client) {
-    return { students: [], assignments: [], submissionsMap: {} };
+    return { students: [], assignments: [], submissionsMap: {}, hasRemoteData: false };
   }
 
   let remoteStudents: Student[] = [];
   let remoteAssignments: Assignment[] = [];
   const submissionsMap: SubmissionMap = {};
   let remoteClassRoom: Partial<ClassRoom> | undefined = undefined;
+  let hasRemoteData = false;
 
-  // 1. Try to fetch from class_metadata (First try specific class_id, otherwise first available row)
+  // 1. Try to fetch from class_metadata
   try {
     let metaQuery = client.from('class_metadata').select('*');
     if (classRoomId) {
@@ -62,10 +64,11 @@ export const fetchSupabaseData = async (
 
     if (!metaError && metaDataRows && metaDataRows.length > 0) {
       const metaData = metaDataRows[0];
-      if (metaData.students && Array.isArray(metaData.students) && metaData.students.length > 0) {
+      hasRemoteData = true;
+      if (metaData.students && Array.isArray(metaData.students)) {
         remoteStudents = metaData.students;
       }
-      if (metaData.assignments && Array.isArray(metaData.assignments) && metaData.assignments.length > 0) {
+      if (metaData.assignments && Array.isArray(metaData.assignments)) {
         remoteAssignments = metaData.assignments;
       }
       if (metaData.classroom_data) {
@@ -86,6 +89,7 @@ export const fetchSupabaseData = async (
       const { data: studentsData, error: studentsError } = await stQuery.order('number', { ascending: true });
 
       if (!studentsError && studentsData && studentsData.length > 0) {
+        hasRemoteData = true;
         remoteStudents = studentsData.map((row: any) => ({
           id: row.id || row.student_id || `st-${row.number}`,
           number: Number(row.number) || 1,
@@ -108,7 +112,8 @@ export const fetchSupabaseData = async (
     }
     const { data: subsData, error: subsError } = await subQuery;
 
-    if (!subsError && subsData) {
+    if (!subsError && subsData && subsData.length > 0) {
+      hasRemoteData = true;
       subsData.forEach((row: any) => {
         if (!submissionsMap[row.assignment_id]) {
           submissionsMap[row.assignment_id] = {};
@@ -129,6 +134,7 @@ export const fetchSupabaseData = async (
     assignments: remoteAssignments,
     submissionsMap,
     classRoom: remoteClassRoom,
+    hasRemoteData,
   };
 };
 
@@ -330,14 +336,16 @@ export const subscribeToSubmissions = (
     note: string | null;
     updated_at: string;
   }) => void,
-  onRosterUpdate?: (newStudents: Student[]) => void
+  onRosterUpdate?: (newStudents: Student[]) => void,
+  onAssignmentsUpdate?: (newAssignments: Assignment[]) => void,
+  onClassRoomUpdate?: (newClassRoom: Partial<ClassRoom>) => void
 ): RealtimeChannel | null => {
   const client = initSupabase(config);
   if (!client) return null;
 
   try {
     const channel = client
-      .channel(`realtime-class-global`)
+      .channel(`realtime-class-global-${Date.now()}`)
       .on(
         'postgres_changes',
         {
@@ -359,9 +367,15 @@ export const subscribeToSubmissions = (
           table: 'class_metadata',
         },
         (payload: any) => {
-          if (payload.new && payload.new.students && onRosterUpdate) {
-            if (Array.isArray(payload.new.students) && payload.new.students.length > 0) {
+          if (payload.new) {
+            if (payload.new.students && onRosterUpdate && Array.isArray(payload.new.students)) {
               onRosterUpdate(payload.new.students);
+            }
+            if (payload.new.assignments && onAssignmentsUpdate && Array.isArray(payload.new.assignments)) {
+              onAssignmentsUpdate(payload.new.assignments);
+            }
+            if (payload.new.classroom_data && onClassRoomUpdate) {
+              onClassRoomUpdate(payload.new.classroom_data);
             }
           }
         }
