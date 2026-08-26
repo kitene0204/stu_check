@@ -1,0 +1,13 @@
+{
+  "students": [
+    {
+      "id": "st-01",
+      "number": 1,
+      "name": "강민준",
+      "gender": "M",
+      "groupNumber": 1
+    }
+  ],
+  "classId": "class-6-1-2026",
+  "updatedAt": "2026-08-26T07:48:10.163Z"
+}

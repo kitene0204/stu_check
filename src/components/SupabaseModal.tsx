@@ -95,7 +95,12 @@ CREATE TABLE IF NOT EXISTS class_metadata (
 -- 4. 실시간(Realtime) 복제 활성화
 ALTER PUBLICATION supabase_realtime ADD TABLE class_submissions;
 ALTER PUBLICATION supabase_realtime ADD TABLE class_metadata;
-ALTER PUBLICATION supabase_realtime ADD TABLE class_students;`;
+ALTER PUBLICATION supabase_realtime ADD TABLE class_students;
+
+-- 5. Row Level Security 정책 해제 (인증 없이 모든 기기/스마트폰 자유로운 동기화)
+ALTER TABLE class_submissions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE class_students DISABLE ROW LEVEL SECURITY;
+ALTER TABLE class_metadata DISABLE ROW LEVEL SECURITY;`;
 
   const handleCopySql = () => {
     navigator.clipboard.writeText(sqlSchema);
