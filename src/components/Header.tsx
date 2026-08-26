@@ -201,6 +201,16 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Mobile Header Right Actions (Compact, responsive, and non-overlapping) */}
         <div className="flex lg:hidden items-center gap-1 sm:gap-1.5 shrink-0">
+          {/* Mobile Direct Roster Edit Button (Always visible on mobile) */}
+          <button
+            onClick={onOpenRosterModal}
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-[#FAF3EB] hover:bg-[#F5E6D3] text-[#8C4A1A] border border-[#BC6C25]/50 rounded-xl text-xs font-bold shadow-xs active:scale-95 transition-all shrink-0 cursor-pointer"
+            title="학생 명단 관리 및 수정"
+          >
+            <Users className="w-4 h-4 text-[#BC6C25]" />
+            <span className="text-[11px] font-bold">명단</span>
+          </button>
+
           {/* Mobile Manual Sync Icon/Pill: Icon only on very small screens, short badge on sm */}
           <button
             onClick={onTriggerManualSync}

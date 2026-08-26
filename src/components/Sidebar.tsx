@@ -9,7 +9,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Trash2,
-  X
+  X,
+  Users
 } from 'lucide-react';
 import { Assignment, AssignmentCategory, Student, SubmissionMap } from '../types';
 
@@ -19,6 +20,7 @@ interface SidebarProps {
   onSelectAssignment: (id: string) => void;
   onOpenNewAssignmentModal: () => void;
   onDeleteAssignment: (id: string, title: string) => void;
+  onOpenRosterModal?: () => void;
   students: Student[];
   submissionsMap: SubmissionMap;
   isMobileOpen?: boolean;
@@ -31,6 +33,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectAssignment,
   onOpenNewAssignmentModal,
   onDeleteAssignment,
+  onOpenRosterModal,
   students,
   submissionsMap,
   isMobileOpen = false,
@@ -106,7 +109,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Category Pills */}
-        <div className="flex flex-wrap gap-1 mb-3.5 pb-2.5 border-b border-[#DCD5C8]/60">
+        <div className="flex flex-wrap gap-1 mb-2.5 pb-2.5 border-b border-[#DCD5C8]/60">
           {categories.map(cat => (
             <button
               key={cat}
@@ -121,6 +124,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
           ))}
         </div>
+
+        {/* Student Roster Management Quick Button in Sidebar */}
+        {onOpenRosterModal && (
+          <button
+            onClick={() => {
+              onOpenRosterModal();
+              if (onCloseMobile) onCloseMobile();
+            }}
+            className="w-full flex items-center justify-between px-3 py-2 bg-[#FAF3EB] hover:bg-[#F5E6D3] text-[#8C4A1A] border border-[#BC6C25]/40 rounded-xl text-xs font-bold shadow-xs active:scale-95 transition-all mb-3 cursor-pointer"
+            title="학생 명단 관리 및 수정 열기"
+          >
+            <span className="flex items-center gap-1.5">
+              <Users className="w-4 h-4 text-[#BC6C25]" />
+              <span>학생 명단 수정 / 관리</span>
+            </span>
+            <span className="px-2 py-0.5 bg-white text-[#8C4A1A] border border-[#BC6C25]/30 rounded-full text-[10px] font-bold">
+              총 {students.length}명
+            </span>
+          </button>
+        )}
 
         {/* Assignment Navigation List */}
         <nav className="space-y-1.5 max-h-[calc(100vh-340px)] overflow-y-auto pr-1">

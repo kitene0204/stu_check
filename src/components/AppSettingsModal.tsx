@@ -17,7 +17,8 @@ import {
   Smartphone,
   QrCode,
   Copy,
-  Info
+  Info,
+  Users
 } from 'lucide-react';
 import { ClassRoom, SupabaseConfig, GoogleSheetsConfig, Student, Assignment, SubmissionMap } from '../types';
 
@@ -30,6 +31,7 @@ interface AppSettingsModalProps {
   sheetsConfig: GoogleSheetsConfig;
   onOpenSupabaseModal: () => void;
   onOpenSheetsModal: () => void;
+  onOpenRosterModal?: () => void;
   students: Student[];
   assignments: Assignment[];
   submissionsMap: SubmissionMap;
@@ -46,6 +48,7 @@ export const AppSettingsModal: React.FC<AppSettingsModalProps> = ({
   sheetsConfig,
   onOpenSupabaseModal,
   onOpenSheetsModal,
+  onOpenRosterModal,
   students,
   assignments,
   submissionsMap,
@@ -368,6 +371,31 @@ export const AppSettingsModal: React.FC<AppSettingsModalProps> = ({
                   />
                 </div>
               </div>
+
+              {/* Student Roster Quick Entry Card */}
+              {onOpenRosterModal && (
+                <div className="p-3.5 bg-[#FAF3EB] border border-[#BC6C25]/40 rounded-xl flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="p-2 bg-[#BC6C25] text-white rounded-lg shrink-0">
+                      <Users className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-[#8C4A1A]">학생 명단 수정 / 일괄 등록</div>
+                      <div className="text-[10px] text-[#A89F91] truncate">현재 등록된 학생: {students.length}명 (엑셀/한글 복사 붙여넣기 가능)</div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenRosterModal();
+                    }}
+                    className="px-3 py-1.5 bg-[#8C4A1A] hover:bg-[#6D3914] text-white rounded-lg text-xs font-bold shrink-0 transition-colors cursor-pointer shadow-xs"
+                  >
+                    명단 수정 열기
+                  </button>
+                </div>
+              )}
 
               {/* Save Button */}
               <div className="pt-2">

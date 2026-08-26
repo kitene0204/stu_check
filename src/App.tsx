@@ -896,6 +896,7 @@ export default function App() {
           onSelectAssignment={(id) => setActiveAssignmentId(id)}
           onOpenNewAssignmentModal={() => setIsNewAssignmentModalOpen(true)}
           onDeleteAssignment={handleDeleteAssignment}
+          onOpenRosterModal={() => setIsRosterModalOpen(true)}
           students={students}
           submissionsMap={submissionsMap}
           isMobileOpen={isMobileSidebarOpen}
@@ -914,6 +915,7 @@ export default function App() {
             onCheckAll={handleCheckAll}
             onOpenNoticeModal={() => setIsNoticeModalOpen(true)}
             onOpenSheetsModal={() => setIsSheetsModalOpen(true)}
+            onOpenRosterModal={() => setIsRosterModalOpen(true)}
             onDeleteAssignment={handleDeleteAssignment}
             totalStudents={totalStudents}
             submittedCount={submittedCount}
@@ -1076,6 +1078,7 @@ export default function App() {
         sheetsConfig={sheetsConfig}
         onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
         onOpenSheetsModal={() => setIsSheetsModalOpen(true)}
+        onOpenRosterModal={() => setIsRosterModalOpen(true)}
         students={students}
         assignments={assignments}
         submissionsMap={submissionsMap}

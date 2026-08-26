@@ -8,7 +8,8 @@ import {
   Users2, 
   Calendar,
   Sparkles,
-  Trash2
+  Trash2,
+  Users
 } from 'lucide-react';
 import { Assignment, ViewMode, FilterMode } from '../types';
 
@@ -21,6 +22,7 @@ interface AssignmentHeaderProps {
   onCheckAll: () => void;
   onOpenNoticeModal: () => void;
   onOpenSheetsModal: () => void;
+  onOpenRosterModal?: () => void;
   onDeleteAssignment?: (id: string, title: string) => void;
   totalStudents: number;
   submittedCount: number;
@@ -37,6 +39,7 @@ export const AssignmentHeader: React.FC<AssignmentHeaderProps> = ({
   onCheckAll,
   onOpenNoticeModal,
   onOpenSheetsModal,
+  onOpenRosterModal,
   onDeleteAssignment,
   totalStudents,
   submittedCount,
@@ -176,6 +179,18 @@ export const AssignmentHeader: React.FC<AssignmentHeaderProps> = ({
             >
               <span className="w-1.5 h-1.5 rounded-full bg-[#D97706] inline-block" />
               보완 ({resubmitCount})
+            </button>
+          )}
+
+          {/* Direct Student Roster Edit Button */}
+          {onOpenRosterModal && (
+            <button
+              onClick={onOpenRosterModal}
+              className="px-2.5 sm:px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer whitespace-nowrap bg-[#FAF3EB] hover:bg-[#F5E6D3] text-[#8C4A1A] border border-[#BC6C25]/40 shadow-xs active:scale-95"
+              title="학생 명단 추가/수정/삭제"
+            >
+              <Users className="w-3.5 h-3.5 text-[#BC6C25]" />
+              <span>명단 수정</span>
             </button>
           )}
         </div>
