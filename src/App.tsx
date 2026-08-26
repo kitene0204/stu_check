@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import confetti from 'canvas-confetti';
+import { PlusCircle, FolderPlus, Users, BookOpen } from 'lucide-react';
 import { 
   ClassRoom, 
   Student, 
@@ -915,6 +916,7 @@ export default function App() {
             onCheckAll={handleCheckAll}
             onOpenNoticeModal={() => setIsNoticeModalOpen(true)}
             onOpenSheetsModal={() => setIsSheetsModalOpen(true)}
+            onOpenNewAssignmentModal={() => setIsNewAssignmentModalOpen(true)}
             onOpenRosterModal={() => setIsRosterModalOpen(true)}
             onDeleteAssignment={handleDeleteAssignment}
             totalStudents={totalStudents}
@@ -923,33 +925,65 @@ export default function App() {
             resubmitCount={resubmitCount}
           />
 
-          {/* Student Matrix Display by ViewMode */}
+          {/* Student Matrix Display by ViewMode or Empty State */}
           <div className="flex-1">
-            {viewMode === 'grid' && (
-              <StudentGrid
-                students={filteredStudents}
-                submissions={currentSubmissions}
-                onToggleStatus={handleToggleStatus}
-                onOpenStudentDetail={(student) => setSelectedStudentForDetail(student)}
-              />
-            )}
+            {assignments.length === 0 ? (
+              <div className="h-full min-h-[300px] flex flex-col items-center justify-center py-12 px-4 text-center border-2 border-dashed border-[#E6E1D5] rounded-2xl bg-[#FAF9F6]/50 my-auto">
+                <div className="w-16 h-16 rounded-2xl bg-[#F4F1EA] flex items-center justify-center text-[#8C4A1A] mb-4 shadow-inner">
+                  <BookOpen className="w-8 h-8 text-[#BC6C25]" />
+                </div>
+                <h3 className="text-lg font-serif-kr font-bold text-[#3D3A35] mb-2">
+                  등록된 과제 및 제출 항목이 없습니다
+                </h3>
+                <p className="text-xs sm:text-sm text-[#7D7568] max-w-md mb-6 leading-relaxed">
+                  새로운 과제나 준비물을 추가하여 학생별 제출 현황을 간편하게 체크해보세요.
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    onClick={() => setIsNewAssignmentModalOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-[#BC6C25] hover:bg-[#A3591B] text-white rounded-xl text-xs sm:text-sm font-bold shadow-xs active:scale-95 transition-all cursor-pointer"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                    <span>새 과제 등록하기</span>
+                  </button>
+                  <button
+                    onClick={() => setIsRosterModalOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-[#FAF3EB] hover:bg-[#F5E6D3] text-[#8C4A1A] border border-[#BC6C25]/40 rounded-xl text-xs sm:text-sm font-bold active:scale-95 transition-all cursor-pointer"
+                  >
+                    <Users className="w-4 h-4 text-[#BC6C25]" />
+                    <span>학생 명단 관리</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {viewMode === 'grid' && (
+                  <StudentGrid
+                    students={filteredStudents}
+                    submissions={currentSubmissions}
+                    onToggleStatus={handleToggleStatus}
+                    onOpenStudentDetail={(student) => setSelectedStudentForDetail(student)}
+                  />
+                )}
 
-            {viewMode === 'list' && (
-              <StudentList
-                students={filteredStudents}
-                submissions={currentSubmissions}
-                onChangeStatus={handleChangeStatus}
-                onOpenStudentDetail={(student) => setSelectedStudentForDetail(student)}
-              />
-            )}
+                {viewMode === 'list' && (
+                  <StudentList
+                    students={filteredStudents}
+                    submissions={currentSubmissions}
+                    onChangeStatus={handleChangeStatus}
+                    onOpenStudentDetail={(student) => setSelectedStudentForDetail(student)}
+                  />
+                )}
 
-            {viewMode === 'groups' && (
-              <StudentGroupView
-                students={filteredStudents}
-                submissions={currentSubmissions}
-                onToggleStatus={handleToggleStatus}
-                onOpenStudentDetail={(student) => setSelectedStudentForDetail(student)}
-              />
+                {viewMode === 'groups' && (
+                  <StudentGroupView
+                    students={filteredStudents}
+                    submissions={currentSubmissions}
+                    onToggleStatus={handleToggleStatus}
+                    onOpenStudentDetail={(student) => setSelectedStudentForDetail(student)}
+                  />
+                )}
+              </>
             )}
           </div>
         </section>

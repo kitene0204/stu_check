@@ -148,8 +148,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Assignment Navigation List */}
         <nav className="space-y-1.5 max-h-[calc(100vh-340px)] overflow-y-auto pr-1">
           {filteredAssignments.length === 0 ? (
-            <div className="text-center py-8 text-xs text-[#A89F91]">
-              등록된 항목이 없습니다.
+            <div className="text-center py-6 px-3 bg-white/40 border border-dashed border-[#DCD5C8] rounded-xl flex flex-col items-center gap-2">
+              <span className="text-xs text-[#A89F91]">등록된 항목이 없습니다</span>
+              <button
+                onClick={() => {
+                  onOpenNewAssignmentModal();
+                  if (onCloseMobile) onCloseMobile();
+                }}
+                className="text-[11px] font-bold text-[#BC6C25] hover:text-[#8C4A1A] underline cursor-pointer"
+              >
+                + 새 과제 추가하기
+              </button>
             </div>
           ) : (
             filteredAssignments.map(asg => {
