@@ -5,7 +5,7 @@ let supabaseClient: SupabaseClient | null = null;
 let currentConfigKey = '';
 
 export const initSupabase = (config: SupabaseConfig): SupabaseClient | null => {
-  if (!config.isEnabled || !config.url || !config.anonKey) {
+  if (!config || !config.isEnabled || !config.url || !config.anonKey) {
     return null;
   }
 
@@ -35,7 +35,7 @@ export const initSupabase = (config: SupabaseConfig): SupabaseClient | null => {
  */
 export const fetchSupabaseData = async (
   config: SupabaseConfig,
-  classRoomId: string
+  classRoomId?: string
 ): Promise<{
   students: Student[];
   assignments: Assignment[];
@@ -52,15 +52,16 @@ export const fetchSupabaseData = async (
   const submissionsMap: SubmissionMap = {};
   let remoteClassRoom: Partial<ClassRoom> | undefined = undefined;
 
-  // 1. Try to fetch from class_metadata
+  // 1. Try to fetch from class_metadata (First try specific class_id, otherwise first available row)
   try {
-    const { data: metaData, error: metaError } = await client
-      .from('class_metadata')
-      .select('*')
-      .eq('class_id', classRoomId)
-      .maybeSingle();
+    let metaQuery = client.from('class_metadata').select('*');
+    if (classRoomId) {
+      metaQuery = metaQuery.eq('class_id', classRoomId);
+    }
+    const { data: metaDataRows, error: metaError } = await metaQuery.limit(1);
 
-    if (!metaError && metaData) {
+    if (!metaError && metaDataRows && metaDataRows.length > 0) {
+      const metaData = metaDataRows[0];
       if (metaData.students && Array.isArray(metaData.students) && metaData.students.length > 0) {
         remoteStudents = metaData.students;
       }
@@ -75,14 +76,14 @@ export const fetchSupabaseData = async (
     // class_metadata table may not exist yet, proceed
   }
 
-  // 2. Try to fetch from class_students or participants table if students still empty
+  // 2. Try to fetch from class_students table if students array still empty
   if (remoteStudents.length === 0) {
     try {
-      const { data: studentsData, error: studentsError } = await client
-        .from('class_students')
-        .select('*')
-        .eq('class_id', classRoomId)
-        .order('number', { ascending: true });
+      let stQuery = client.from('class_students').select('*');
+      if (classRoomId) {
+        stQuery = stQuery.eq('class_id', classRoomId);
+      }
+      const { data: studentsData, error: studentsError } = await stQuery.order('number', { ascending: true });
 
       if (!studentsError && studentsData && studentsData.length > 0) {
         remoteStudents = studentsData.map((row: any) => ({
@@ -101,10 +102,11 @@ export const fetchSupabaseData = async (
 
   // 3. Try to fetch from class_submissions
   try {
-    const { data: subsData, error: subsError } = await client
-      .from('class_submissions')
-      .select('*')
-      .eq('class_id', classRoomId);
+    let subQuery = client.from('class_submissions').select('*');
+    if (classRoomId) {
+      subQuery = subQuery.eq('class_id', classRoomId);
+    }
+    const { data: subsData, error: subsError } = await subQuery;
 
     if (!subsError && subsData) {
       subsData.forEach((row: any) => {
@@ -192,6 +194,8 @@ export const syncStudentsToSupabase = async (
 
     if (!metaError) {
       success = true;
+    } else {
+      console.warn('class_metadata upsert error:', metaError.message);
     }
   } catch (e) {
     // Ignore if table not created
@@ -333,14 +337,13 @@ export const subscribeToSubmissions = (
 
   try {
     const channel = client
-      .channel(`realtime-class-${classRoomId}`)
+      .channel(`realtime-class-global`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'class_submissions',
-          filter: `class_id=eq.${classRoomId}`,
         },
         (payload: any) => {
           if (payload.new) {
@@ -354,7 +357,6 @@ export const subscribeToSubmissions = (
           event: '*',
           schema: 'public',
           table: 'class_metadata',
-          filter: `class_id=eq.${classRoomId}`,
         },
         (payload: any) => {
           if (payload.new && payload.new.students && onRosterUpdate) {

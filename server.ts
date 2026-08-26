@@ -6,7 +6,7 @@ import { createServer as createViteServer } from 'vite';
 const app = express();
 const PORT = 3000;
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '15mb' }));
 
 // File path for server persistent store
 const DATA_DIR = path.join(process.cwd(), 'data');

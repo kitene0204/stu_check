@@ -102,7 +102,7 @@ export default function App() {
     }, 3000);
   }, []);
 
-  // Track initialization so we only load priority hierarchy once on mount
+  // Track initialization
   const isMountedRef = useRef(false);
 
   // Check for mobile QR sync parameters on load
@@ -129,7 +129,7 @@ export default function App() {
           setSheetsConfig(decoded.sheetsConfig);
           saveSheetsConfig(decoded.sheetsConfig);
         }
-        showToast('📱 데스크탑 학급 데이터 및 연동 설정이 스마트폰에 즉시 동기화되었습니다!');
+        showToast('📱 데스크탑 학급 데이터 및 연동 설정이 즉시 동기화되었습니다!');
         
         // Clean URL parameter
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -139,25 +139,66 @@ export default function App() {
     }
   }, [showToast]);
 
-  // Primary Data Source Priority on Mount:
-  // [Priority 1: Supabase Cloud DB] -> [Priority 2: Backend Server Store] -> [Priority 3: LocalStorage]
+  // Primary Data Source Sync Strategy:
+  // 1. Check Server Persistent Store (/api/store) so ANY browser instantly gets the active roster & Supabase config
+  // 2. If Supabase is configured (either from local or server store), fetch remote cloud DB
   useEffect(() => {
     if (isMountedRef.current) return;
     isMountedRef.current = true;
 
     const initializeDataSources = async () => {
-      let loadedFromSupabase = false;
+      setSyncState('syncing');
 
-      // 1. Try Supabase Cloud DB first if configured
-      if (supabaseConfig.isEnabled && supabaseConfig.url && supabaseConfig.anonKey) {
+      let currentSupabaseCfg = supabaseConfig;
+      let currentClassId = classRoom.id;
+
+      // 1. Fetch Server Store first to sync cross-browser
+      try {
+        const serverData = await fetchServerStoreData();
+        if (serverData) {
+          if (serverData.students && Array.isArray(serverData.students) && serverData.students.length > 0) {
+            setStudents(serverData.students);
+            localStorage.setItem('class_tracker_students', JSON.stringify(serverData.students));
+          }
+          if (serverData.classRoom) {
+            setClassRoom(serverData.classRoom);
+            currentClassId = serverData.classRoom.id;
+            localStorage.setItem('class_tracker_classroom', JSON.stringify(serverData.classRoom));
+          }
+          if (serverData.assignments && Array.isArray(serverData.assignments) && serverData.assignments.length > 0) {
+            setAssignments(serverData.assignments);
+            localStorage.setItem('class_tracker_assignments', JSON.stringify(serverData.assignments));
+            setActiveAssignmentId(prev => prev || serverData.assignments![0].id);
+          }
+          if (serverData.submissionsMap && Object.keys(serverData.submissionsMap).length > 0) {
+            setSubmissionsMap(prev => {
+              const merged = { ...prev, ...serverData.submissionsMap };
+              localStorage.setItem('class_tracker_submissions', JSON.stringify(merged));
+              return merged;
+            });
+          }
+          if (serverData.supabaseConfig && serverData.supabaseConfig.url && serverData.supabaseConfig.anonKey) {
+            currentSupabaseCfg = serverData.supabaseConfig;
+            setSupabaseConfig(serverData.supabaseConfig);
+            localStorage.setItem('class_tracker_supabase_config', JSON.stringify(serverData.supabaseConfig));
+          }
+          if (serverData.sheetsConfig && (serverData.sheetsConfig.spreadsheetUrl || serverData.sheetsConfig.webhookUrl)) {
+            setSheetsConfig(serverData.sheetsConfig);
+            localStorage.setItem('class_tracker_sheets_config', JSON.stringify(serverData.sheetsConfig));
+          }
+        }
+      } catch (err) {
+        console.warn('Backend store fetch error:', err);
+      }
+
+      // 2. Fetch Supabase Cloud DB if configured
+      if (currentSupabaseCfg.isEnabled && currentSupabaseCfg.url && currentSupabaseCfg.anonKey) {
         try {
-          setSyncState('syncing');
-          const remote = await fetchSupabaseData(supabaseConfig, classRoom.id);
+          const remote = await fetchSupabaseData(currentSupabaseCfg, currentClassId);
 
           if (remote.students && remote.students.length > 0) {
             setStudents(remote.students);
-            saveStudents(remote.students, classRoom.id);
-            loadedFromSupabase = true;
+            saveStudents(remote.students, currentClassId);
           }
 
           if (remote.assignments && remote.assignments.length > 0) {
@@ -181,62 +222,80 @@ export default function App() {
               return merged;
             });
           }
-
-          if (loadedFromSupabase) {
-            setSyncState('synced');
-            setTimeout(() => setSyncState('idle'), 2500);
-            return;
-          }
         } catch (err) {
           console.warn('Supabase initial fetch warning:', err);
         }
       }
 
-      // 2. Try Server Backend Store (/api/store) if Supabase had no roster
-      try {
-        const serverData = await fetchServerStoreData();
-        if (serverData) {
-          if (serverData.students && Array.isArray(serverData.students) && serverData.students.length > 0) {
-            setStudents(serverData.students);
-            localStorage.setItem('class_tracker_students', JSON.stringify(serverData.students));
-          }
-          if (serverData.classRoom) {
-            setClassRoom(serverData.classRoom);
-            localStorage.setItem('class_tracker_classroom', JSON.stringify(serverData.classRoom));
-          }
-          if (serverData.assignments && Array.isArray(serverData.assignments) && serverData.assignments.length > 0) {
-            setAssignments(serverData.assignments);
-            localStorage.setItem('class_tracker_assignments', JSON.stringify(serverData.assignments));
-            setActiveAssignmentId(prev => prev || serverData.assignments![0].id);
-          }
-          if (serverData.submissionsMap && Object.keys(serverData.submissionsMap).length > 0) {
-            setSubmissionsMap(prev => {
-              const merged = { ...prev, ...serverData.submissionsMap };
-              localStorage.setItem('class_tracker_submissions', JSON.stringify(merged));
-              return merged;
-            });
-          }
-          if (serverData.supabaseConfig && serverData.supabaseConfig.url && !supabaseConfig.url) {
-            setSupabaseConfig(serverData.supabaseConfig);
-            localStorage.setItem('class_tracker_supabase_config', JSON.stringify(serverData.supabaseConfig));
-          }
-          if (serverData.sheetsConfig && !sheetsConfig.spreadsheetUrl && !sheetsConfig.webhookUrl) {
-            setSheetsConfig(serverData.sheetsConfig);
-            localStorage.setItem('class_tracker_sheets_config', JSON.stringify(serverData.sheetsConfig));
-          }
-          setSyncState('synced');
-          setTimeout(() => setSyncState('idle'), 2000);
-          return;
-        }
-      } catch (err) {
-        console.warn('Backend store fetch error:', err);
-      }
-
-      setSyncState('idle');
+      setSyncState('synced');
+      setTimeout(() => setSyncState('idle'), 2000);
     };
 
     initializeDataSources();
-  }, [supabaseConfig, classRoom.id, sheetsConfig]);
+  }, []);
+
+  // Periodic background polling (every 6 seconds) to ensure real-time cross-browser sync even without Supabase
+  useEffect(() => {
+    const pollInterval = setInterval(async () => {
+      try {
+        const serverData = await fetchServerStoreData();
+        if (!serverData) return;
+
+        // Check if roster changed on another browser
+        if (serverData.students && Array.isArray(serverData.students) && serverData.students.length > 0) {
+          setStudents(prev => {
+            if (JSON.stringify(prev) !== JSON.stringify(serverData.students)) {
+              localStorage.setItem('class_tracker_students', JSON.stringify(serverData.students));
+              return serverData.students!;
+            }
+            return prev;
+          });
+        }
+
+        // Check if submissions updated on another browser
+        if (serverData.submissionsMap && Object.keys(serverData.submissionsMap).length > 0) {
+          setSubmissionsMap(prev => {
+            let hasChanged = false;
+            const next = { ...prev };
+            Object.entries(serverData.submissionsMap!).forEach(([asgId, studentSubs]) => {
+              if (!next[asgId]) {
+                next[asgId] = studentSubs;
+                hasChanged = true;
+              } else {
+                Object.entries(studentSubs).forEach(([stId, subItem]) => {
+                  const current = next[asgId][stId];
+                  if (!current || (subItem.updatedAt && (!current.updatedAt || new Date(subItem.updatedAt).getTime() > new Date(current.updatedAt).getTime()))) {
+                    next[asgId] = { ...next[asgId], [stId]: subItem };
+                    hasChanged = true;
+                  }
+                });
+              }
+            });
+            if (hasChanged) {
+              localStorage.setItem('class_tracker_submissions', JSON.stringify(next));
+              return next;
+            }
+            return prev;
+          });
+        }
+
+        // Check if classroom metadata changed
+        if (serverData.classRoom) {
+          setClassRoom(prev => {
+            if (JSON.stringify(prev) !== JSON.stringify(serverData.classRoom)) {
+              localStorage.setItem('class_tracker_classroom', JSON.stringify(serverData.classRoom));
+              return serverData.classRoom!;
+            }
+            return prev;
+          });
+        }
+      } catch (e) {
+        // Silent error handling for periodic poll
+      }
+    }, 5000);
+
+    return () => clearInterval(pollInterval);
+  }, []);
 
   // Active assignment
   const activeAssignment = useMemo(() => {
@@ -488,7 +547,7 @@ export default function App() {
         setSyncState('syncing');
         const ok = await syncStudentsToSupabase(supabaseConfig, classRoom.id, updatedStudents);
         if (ok) {
-          showToast(`⚡ Supabase 클라우드에 ${updatedStudents.length}명의 명단이 저장되었습니다!`);
+          showToast(`⚡ Supabase 클라우드에 ${updatedStudents.length}명의 명단이 실시간 저장되었습니다!`);
         }
         setSyncState('synced');
         setTimeout(() => setSyncState('idle'), 2000);
@@ -559,7 +618,7 @@ export default function App() {
     setSubmissionsMap(updatedMap);
     saveSubmissions(updatedMap);
 
-    // Realtime Push to Supabase & Google Sheets
+    // Realtime Push to Supabase & Google Sheets & Server Store
     triggerAutoSync(asgId, [{
       studentId,
       status: newStatus,
@@ -609,7 +668,7 @@ export default function App() {
     setSubmissionsMap(updatedMap);
     saveSubmissions(updatedMap);
 
-    // Realtime Push to Supabase & Google Sheets
+    // Realtime Push to Supabase & Google Sheets & Server Store
     triggerAutoSync(asgId, [{
       studentId,
       status: newStatus,
@@ -650,7 +709,7 @@ export default function App() {
     setSubmissionsMap(updatedSubmissions);
     saveSubmissions(updatedSubmissions);
 
-    // Realtime Push to Supabase & Google Sheets
+    // Realtime Push to Supabase & Google Sheets & Server Store
     triggerAutoSync(asgId, supabasePayload, updatedCurrentAsg);
 
     try {
@@ -848,7 +907,7 @@ export default function App() {
             title="Supabase 실시간 클라우드 연동 상태"
           >
             <span className={`w-1.5 h-1.5 rounded-full ${supabaseConfig.isEnabled && supabaseConfig.url ? 'bg-[#588157] animate-pulse' : 'bg-[#BC6C25]'}`} />
-            <span>{supabaseConfig.isEnabled && supabaseConfig.url ? '실시간 동기화 ON' : '로컬 모드 (연동 가능)'}</span>
+            <span>{supabaseConfig.isEnabled && supabaseConfig.url ? '실시간 동기화 ON' : '로컬/서버 모드 (연동 가능)'}</span>
           </button>
         </div>
       </footer>
@@ -931,7 +990,7 @@ export default function App() {
           setSubmissionsMap(updatedMap);
           saveSubmissions(updatedMap);
 
-          // Realtime Push to Supabase & Google Sheets
+          // Realtime Push to Supabase & Google Sheets & Server
           triggerAutoSync(asgId, [{
             studentId,
             status,
