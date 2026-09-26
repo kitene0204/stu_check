@@ -22,6 +22,7 @@ interface HeaderProps {
   supabaseConfig: SupabaseConfig;
   sheetsConfig: GoogleSheetsConfig;
   syncState: SyncState;
+  lastSyncedAt?: Date | null;
   onTriggerManualSync: () => void;
   onOpenRosterModal: () => void;
   onOpenPrintModal: () => void;
@@ -36,6 +37,7 @@ export const Header: React.FC<HeaderProps> = ({
   classRoom,
   supabaseConfig,
   syncState,
+  lastSyncedAt,
   onTriggerManualSync,
   onOpenRosterModal,
   onOpenPrintModal,
@@ -98,35 +100,50 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Right: Desktop Action Bar (Visible on lg and larger) */}
         <div className="hidden lg:flex items-center gap-2.5 shrink-0">
           {/* Realtime Manual Sync Button with Animated Spinner & Status Indicator */}
-          <button
-            onClick={onTriggerManualSync}
-            disabled={isSyncing}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs transition-all shadow-xs cursor-pointer border active:scale-95 ${
-              isSyncing
-                ? 'bg-[#EBF5EE] border-[#2D6A4F] text-[#2D6A4F] ring-2 ring-[#2D6A4F]/20'
-                : isSynced
-                  ? 'bg-[#E8F0E4] border-[#A3B18A] text-[#3D5A30] hover:bg-[#DCE9D6]'
-                  : 'bg-white hover:bg-[#FAF9F5] border-[#DCD5C8] text-[#3D3A35]'
-            }`}
-            title="구글 시트 / Supabase / 스마트폰 전체 즉시 동기화"
-          >
-            {isSyncing ? (
-              <>
-                <RefreshCw className="w-4 h-4 text-[#2D6A4F] animate-spin" />
-                <span className="font-extrabold text-[#2D6A4F]">동기화 중...</span>
-              </>
-            ) : isSynced ? (
-              <>
-                <CheckCircle2 className="w-4 h-4 text-[#2D6A4F] animate-in zoom-in-50" />
-                <span className="font-extrabold text-[#2D6A4F]">동기화 완료</span>
-              </>
-            ) : (
-              <>
-                <RefreshCw className="w-4 h-4 text-[#5D574F]" />
-                <span>수동 동기화</span>
-              </>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onTriggerManualSync}
+              disabled={isSyncing}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs transition-all shadow-xs cursor-pointer border active:scale-95 ${
+                isSyncing
+                  ? 'bg-[#EBF5EE] border-[#2D6A4F] text-[#2D6A4F] ring-2 ring-[#2D6A4F]/20'
+                  : isSynced
+                    ? 'bg-[#E8F0E4] border-[#A3B18A] text-[#3D5A30] hover:bg-[#DCE9D6]'
+                    : 'bg-white hover:bg-[#FAF9F5] border-[#DCD5C8] text-[#3D3A35]'
+              }`}
+              title={`구글 시트 / Supabase / 스마트폰 전체 즉시 동기화\n최근 동기화: ${lastSyncedAt ? lastSyncedAt.toLocaleString('ko-KR') : '확인 중'}`}
+            >
+              {isSyncing ? (
+                <>
+                  <RefreshCw className="w-4 h-4 text-[#2D6A4F] animate-spin" />
+                  <span className="font-extrabold text-[#2D6A4F]">동기화 중...</span>
+                </>
+              ) : isSynced ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-[#2D6A4F] animate-in zoom-in-50" />
+                  <span className="font-extrabold text-[#2D6A4F]">동기화 완료</span>
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4 text-[#5D574F]" />
+                  <span>수동 동기화</span>
+                </>
+              )}
+            </button>
+
+            {lastSyncedAt && (
+              <span 
+                className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/70 border border-[#DCD5C8] text-[11px] text-[#5D574F] shadow-2xs" 
+                title={`서버 최신 동기화 시각: ${lastSyncedAt.toLocaleString('ko-KR')}`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-[#2D6A4F]" />
+                <span className="text-[#8C8275] text-[10px]">최근:</span>
+                <span className="font-mono font-bold text-[#2D6A4F] text-[11px]">
+                  {lastSyncedAt.toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })}
+                </span>
+              </span>
             )}
-          </button>
+          </div>
 
           <div className="h-4 w-px bg-[#DCD5C8] mx-0.5" />
 
@@ -278,8 +295,13 @@ export const Header: React.FC<HeaderProps> = ({
               <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin text-[#2D6A4F]' : isSynced ? 'text-[#2D6A4F]' : 'text-[#5D574F]'}`} />
               <span>클라우드 & 구글 시트 동기화</span>
             </span>
-            <span className="text-[11px] font-extrabold">
-              {isSyncing ? '동기화 진행 중...' : isSynced ? '동기화 완료됨' : '지금 동기화 실행'}
+            <span className="text-[11px] font-extrabold flex flex-col items-end">
+              <span>{isSyncing ? '동기화 진행 중...' : isSynced ? '동기화 완료됨' : '지금 동기화 실행'}</span>
+              {lastSyncedAt && (
+                <span className="text-[9px] font-medium text-[#7D7568]">
+                  최근: {lastSyncedAt.toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true })}
+                </span>
+              )}
             </span>
           </button>
 

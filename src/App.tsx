@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import confetti from 'canvas-confetti';
-import { PlusCircle, FolderPlus, Users, BookOpen } from 'lucide-react';
+import { PlusCircle, FolderPlus, Users, BookOpen, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { 
   ClassRoom, 
   Student, 
@@ -72,6 +72,55 @@ export default function App() {
 
   // Sync state: 'idle' | 'syncing' | 'synced' | 'error'
   const [syncState, setSyncState] = useState<SyncState>('idle');
+
+  // Last successfully synced timestamp from server
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(() => {
+    const saved = localStorage.getItem('class_tracker_last_synced');
+    return saved ? new Date(saved) : null;
+  });
+
+  const updateLastSyncedTime = useCallback(() => {
+    const now = new Date();
+    setLastSyncedAt(now);
+    try {
+      localStorage.setItem('class_tracker_last_synced', now.toISOString());
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
+  // Periodic tick every 5 seconds to keep relative time string ("방금", "15초 전") fresh
+  const [, setSyncTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSyncTick(t => t + 1);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Helper to format last sync timestamp for display
+  const formatLastSyncDisplay = useCallback((date: Date | null) => {
+    if (!date) return { time: '확인 중...', relative: '' };
+
+    const time = date.toLocaleTimeString('ko-KR', {
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+    });
+
+    const diffSec = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+    let relative = '방금';
+    if (diffSec >= 5 && diffSec < 60) {
+      relative = `${diffSec}초 전`;
+    } else if (diffSec >= 60 && diffSec < 3600) {
+      relative = `${Math.floor(diffSec / 60)}분 전`;
+    } else if (diffSec >= 3600) {
+      relative = `${Math.floor(diffSec / 3600)}시간 전`;
+    }
+
+    return { time, relative };
+  }, []);
 
   const [activeAssignmentId, setActiveAssignmentId] = useState<string>(() => {
     return assignments.length > 0 ? assignments[0].id : '';
@@ -226,6 +275,7 @@ export default function App() {
       }
 
       setSyncState('synced');
+      updateLastSyncedTime();
       setTimeout(() => setSyncState('idle'), 2000);
     };
 
@@ -262,6 +312,7 @@ export default function App() {
           }
 
           setSyncState('synced');
+          updateLastSyncedTime();
           setTimeout(() => setSyncState('idle'), 1500);
         } catch (err) {
           console.error('SSE store_update parse error:', err);
@@ -275,6 +326,7 @@ export default function App() {
             setStudents(payload.students);
             localStorage.setItem('class_tracker_students', JSON.stringify(payload.students));
             setSyncState('synced');
+            updateLastSyncedTime();
             setTimeout(() => setSyncState('idle'), 1500);
           }
         } catch (err) {
@@ -289,6 +341,7 @@ export default function App() {
             setSubmissionsMap(payload.submissionsMap);
             localStorage.setItem('class_tracker_submissions', JSON.stringify(payload.submissionsMap));
             setSyncState('synced');
+            updateLastSyncedTime();
             setTimeout(() => setSyncState('idle'), 1500);
           }
         } catch (err) {
@@ -304,6 +357,7 @@ export default function App() {
       try {
         const serverData = await fetchServerStoreData();
         if (!serverData) return;
+        updateLastSyncedTime();
 
         if (serverData.students && Array.isArray(serverData.students) && serverData.students.length > 0) {
           setStudents(prev => {
@@ -387,10 +441,12 @@ export default function App() {
         });
 
         setSyncState('synced');
+        updateLastSyncedTime();
         setTimeout(() => setSyncState('idle'), 2000);
       },
       (newRemoteStudents) => {
         if (Array.isArray(newRemoteStudents) && newRemoteStudents.length > 0) {
+          updateLastSyncedTime();
           setStudents(prev => {
             if (JSON.stringify(prev) !== JSON.stringify(newRemoteStudents)) {
               saveStudents(newRemoteStudents, classRoom.id);
@@ -403,6 +459,7 @@ export default function App() {
       },
       (newRemoteAssignments) => {
         if (Array.isArray(newRemoteAssignments)) {
+          updateLastSyncedTime();
           setAssignments(prev => {
             if (JSON.stringify(prev) !== JSON.stringify(newRemoteAssignments)) {
               saveAssignments(newRemoteAssignments);
@@ -418,6 +475,7 @@ export default function App() {
       },
       (newRemoteClassRoom) => {
         if (newRemoteClassRoom) {
+          updateLastSyncedTime();
           setClassRoom(prev => {
             const merged = { ...prev, ...newRemoteClassRoom };
             saveClassRoom(merged);
@@ -432,6 +490,7 @@ export default function App() {
       try {
         const remote = await fetchSupabaseData(supabaseConfig, classRoom.id);
         if (remote.hasRemoteData) {
+          updateLastSyncedTime();
           if (remote.resolvedClassId && remote.resolvedClassId !== classRoom.id) {
             setClassRoom(prev => {
               const u = { ...prev, id: remote.resolvedClassId! };
@@ -480,6 +539,7 @@ export default function App() {
         try {
           const remote = await fetchSupabaseData(supabaseConfig, classRoom.id);
           if (remote.hasRemoteData) {
+            updateLastSyncedTime();
             if (remote.students && remote.students.length > 0) setStudents(remote.students);
             if (remote.assignments && remote.assignments.length > 0) setAssignments(remote.assignments);
             if (remote.submissionsMap && Object.keys(remote.submissionsMap).length > 0) {
@@ -518,6 +578,7 @@ export default function App() {
     if (supabaseConfig.isEnabled && supabaseConfig.url) {
       try {
         await upsertSubmissionsToSupabase(supabaseConfig, classRoom.id, asgId, itemsToSync);
+        updateLastSyncedTime();
       } catch (err) {
         console.error('Auto sync to Supabase failed:', err);
       }
@@ -545,6 +606,7 @@ export default function App() {
     });
 
     setSyncState('synced');
+    updateLastSyncedTime();
     setTimeout(() => {
       setSyncState('idle');
     }, 1800);
@@ -618,6 +680,7 @@ export default function App() {
       });
 
       setSyncState('synced');
+      updateLastSyncedTime();
 
       if (syncCount > 0) {
         showToast('✅ Supabase 클라우드, 서버 및 모든 기기 실시간 동기화 완료!');
@@ -1027,6 +1090,7 @@ export default function App() {
         supabaseConfig={supabaseConfig}
         sheetsConfig={sheetsConfig}
         syncState={syncState}
+        lastSyncedAt={lastSyncedAt}
         onTriggerManualSync={handleTriggerManualSync}
         onOpenRosterModal={() => setIsRosterModalOpen(true)}
         onOpenPrintModal={() => setIsPrintModalOpen(true)}
@@ -1143,13 +1207,35 @@ export default function App() {
 
       {/* Natural Tones Footer with Sync indicator */}
       <footer className="h-10 md:h-11 bg-[#FAF9F6] border-t border-[#DCD5C8] px-3.5 sm:px-6 md:px-8 flex items-center justify-between text-[10px] sm:text-[11px] font-medium text-[#A89F91] shrink-0">
-        <div className="truncate">
+        <div className="truncate pr-2">
           &copy; 2026 {classRoom.schoolName} {classRoom.grade}학년 {classRoom.classNumber}반
         </div>
         <div className="flex items-center gap-2 text-[10px] sm:text-[11px] shrink-0">
+          {/* Last Server Sync Timestamp (Bottom Corner Indicator) */}
+          <button
+            onClick={handleTriggerManualSync}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white border border-[#DCD5C8] text-[#3D3A35] hover:bg-[#FAF9F5] hover:border-[#2D6A4F]/40 active:scale-95 transition-all shadow-2xs cursor-pointer select-none group"
+            title={`서버 최신 동기화 완료: ${lastSyncedAt ? lastSyncedAt.toLocaleString('ko-KR') : '확인 중'}\n(클릭하여 즉시 새로고침)`}
+          >
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#52B788] opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#2D6A4F]"></span>
+            </span>
+            <span className="text-[#8C8275] hidden xs:inline shrink-0">최근 동기화:</span>
+            <span className="font-bold text-[#2D6A4F] shrink-0 font-mono tracking-tight">
+              {formatLastSyncDisplay(lastSyncedAt).time}
+            </span>
+            {formatLastSyncDisplay(lastSyncedAt).relative && (
+              <span className="text-[9px] text-[#8C8275] hidden sm:inline shrink-0">
+                ({formatLastSyncDisplay(lastSyncedAt).relative})
+              </span>
+            )}
+            <RefreshCw className={`w-2.5 h-2.5 text-[#A89F91] group-hover:text-[#2D6A4F] transition-all shrink-0 ml-0.5 ${syncState === 'syncing' ? 'animate-spin text-[#2D6A4F]' : 'group-hover:rotate-180'}`} />
+          </button>
+
           <button
             onClick={() => setIsSupabaseModalOpen(true)}
-            className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-semibold border cursor-pointer transition-colors ${
+            className={`hidden md:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-semibold border cursor-pointer transition-colors ${
               supabaseConfig.isEnabled && supabaseConfig.url
                 ? 'bg-[#E8F0E4] text-[#3D5A30] border-[#A3B18A]'
                 : 'bg-emerald-50 text-[#2D6A4F] border-emerald-300 hover:bg-emerald-100'
