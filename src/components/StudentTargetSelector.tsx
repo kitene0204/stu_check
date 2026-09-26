@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Users, CheckCircle2, Circle, Search, X, Check } from 'lucide-react';
+import { Users, CheckCircle2, Circle, Search, X, Check, XCircle, CheckSquare } from 'lucide-react';
 import { Student } from '../types';
 
 interface StudentTargetSelectorProps {
@@ -126,49 +126,59 @@ export const StudentTargetSelector: React.FC<StudentTargetSelectorProps> = ({
 
       {/* Custom Student Selector Panel */}
       {targetType === 'custom' && (
-        <div className="pt-2 border-t border-[#EEECE6] space-y-2 animate-in fade-in duration-150">
-          {/* Quick Filter Buttons */}
-          <div className="flex flex-wrap items-center gap-1 text-[11px]">
-            <span className="text-[#A89F91] text-[10px] mr-0.5">빠른 선택:</span>
-            <button
-              type="button"
-              onClick={handleSelectAll}
-              className="px-2 py-0.5 bg-white hover:bg-[#F2EDE4] border border-[#DCD5C8] rounded-md text-[#5D574F] cursor-pointer"
-            >
-              모두 선택
-            </button>
-            <button
-              type="button"
-              onClick={handleDeselectAll}
-              className="px-2 py-0.5 bg-white hover:bg-[#F2EDE4] border border-[#DCD5C8] rounded-md text-[#5D574F] cursor-pointer"
-            >
-              모두 해제
-            </button>
-            <button
-              type="button"
-              onClick={handleSelectOdd}
-              className="px-2 py-0.5 bg-white hover:bg-[#F2EDE4] border border-[#DCD5C8] rounded-md text-[#5D574F] cursor-pointer"
-            >
-              홀수번
-            </button>
-            <button
-              type="button"
-              onClick={handleSelectEven}
-              className="px-2 py-0.5 bg-white hover:bg-[#F2EDE4] border border-[#DCD5C8] rounded-md text-[#5D574F] cursor-pointer"
-            >
-              짝수번
-            </button>
-
-            {availableGroups.map(g => (
+        <div className="pt-2 border-t border-[#EEECE6] space-y-2.5 animate-in fade-in duration-150">
+          {/* Quick Selection Toolbar with Prominent [전체 선택 해제] Button */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-[#FAF3EB]/80 border border-[#BC6C25]/25 rounded-xl">
+            <div className="flex items-center gap-1.5">
               <button
-                key={g}
                 type="button"
-                onClick={() => handleSelectGroup(g)}
-                className="px-2 py-0.5 bg-white hover:bg-[#F2EDE4] border border-[#DCD5C8] rounded-md text-[#5D574F] cursor-pointer"
+                onClick={handleDeselectAll}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-red-50 text-[#C53030] hover:text-[#9B2C2C] border-2 border-red-300 hover:border-red-400 rounded-lg text-xs font-bold shadow-xs transition-all active:scale-95 cursor-pointer"
+                title="선택된 모든 학생을 한 번에 해제합니다"
               >
-                {g}모둠
+                <XCircle className="w-4 h-4 text-[#C53030]" />
+                <span>전체 선택 해제</span>
               </button>
-            ))}
+
+              <button
+                type="button"
+                onClick={handleSelectAll}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-[#F2EDE4] text-[#3D3A35] border border-[#DCD5C8] rounded-lg text-xs font-semibold shadow-xs transition-all active:scale-95 cursor-pointer"
+                title="학급 학생 전체를 선택합니다"
+              >
+                <CheckSquare className="w-3.5 h-3.5 text-[#588157]" />
+                <span>전체 선택</span>
+              </button>
+            </div>
+
+            {/* Quick Filter Buttons (Odd, Even, Groups) */}
+            <div className="flex flex-wrap items-center gap-1 text-[11px]">
+              <span className="text-[#8C4A1A] text-[10px] font-semibold mr-0.5">조건 선택:</span>
+              <button
+                type="button"
+                onClick={handleSelectOdd}
+                className="px-2 py-1 bg-white hover:bg-[#F2EDE4] border border-[#DCD5C8] rounded-md text-[#5D574F] font-medium cursor-pointer"
+              >
+                홀수번
+              </button>
+              <button
+                type="button"
+                onClick={handleSelectEven}
+                className="px-2 py-1 bg-white hover:bg-[#F2EDE4] border border-[#DCD5C8] rounded-md text-[#5D574F] font-medium cursor-pointer"
+              >
+                짝수번
+              </button>
+              {availableGroups.map(g => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => handleSelectGroup(g)}
+                  className="px-2 py-1 bg-white hover:bg-[#F2EDE4] border border-[#DCD5C8] rounded-md text-[#5D574F] font-medium cursor-pointer"
+                >
+                  {g}모둠
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Search Box */}
