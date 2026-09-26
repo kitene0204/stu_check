@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   X, 
   Users, 
@@ -22,6 +22,19 @@ import { Student } from '../types';
 import { parseStudentRosterText } from '../services/storageService';
 import { INITIAL_STUDENTS } from '../data/initialData';
 
+// Safe helper to extract group/class name from student object
+export const getStudentGroupName = (student: Student | null | undefined): string => {
+  if (!student) return '1모둠';
+  if (student.groupName != null) {
+    const trimmed = String(student.groupName).trim();
+    if (trimmed) return trimmed;
+  }
+  if (student.groupNumber != null && !isNaN(Number(student.groupNumber))) {
+    return `${student.groupNumber}모둠`;
+  }
+  return '1모둠';
+};
+
 interface RosterModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -34,53 +47,61 @@ interface RosterModalProps {
 export const RosterModal: React.FC<RosterModalProps> = ({
   isOpen,
   onClose,
-  students,
+  students = [],
   onSaveStudents,
   onUpdateStudents,
   onShowToast,
 }) => {
+  // Safe array of students
+  const safeStudents = useMemo(() => Array.isArray(students) ? students : [], [students]);
+
+  // Tab navigation: 'list' | 'paste' | 'add'
   const [activeTab, setActiveTab] = useState<'list' | 'paste' | 'add'>('list');
+
+  // Paste Tab State
   const [pasteText, setPasteText] = useState('');
   const [pasteGroupName, setPasteGroupName] = useState('');
   const [importMode, setImportMode] = useState<'replace' | 'append'>('replace');
-  
-  // Group tool state in 'list' tab
+
+  // Group Tool State in 'list' tab
   const [isGroupToolOpen, setIsGroupToolOpen] = useState(false);
   const [filterGroup, setFilterGroup] = useState<string>('all');
   const [selectedStudentIdsForGroup, setSelectedStudentIdsForGroup] = useState<string[]>([]);
   const [batchTargetGroup, setBatchTargetGroup] = useState('1반');
   const [splitNumClasses, setSplitNumClasses] = useState(2);
   const [rangeStart, setRangeStart] = useState(1);
-  const [rangeEnd, setRangeEnd] = useState(Math.min(10, students.length));
+  const [rangeEnd, setRangeEnd] = useState(Math.max(1, Math.min(10, safeStudents.length)));
   const [rangeGroupName, setRangeGroupName] = useState('1반');
   const [teamSize, setTeamSize] = useState(4);
 
-  // Inline group editing modal/popover
+  // Inline group editing state
   const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
   const [editingGroupNameInput, setEditingGroupNameInput] = useState('');
 
   // Single student form
-  const [newNum, setNewNum] = useState<number>(students.length + 1);
+  const [newNum, setNewNum] = useState<number>(safeStudents.length + 1);
   const [newName, setNewName] = useState('');
   const [newGender, setNewGender] = useState<'M' | 'F'>('M');
   const [newGroupName, setNewGroupName] = useState('1반');
   const [newNote, setNewNote] = useState('');
 
+  // Sync rangeEnd and newNum when safeStudents changes
+  useEffect(() => {
+    if (safeStudents.length > 0) {
+      setRangeEnd(prev => prev === 1 ? Math.min(10, safeStudents.length) : prev);
+      setNewNum(safeStudents.length + 1);
+    }
+  }, [safeStudents.length]);
+
   // Extract all distinct group names
   const uniqueGroups = useMemo(() => {
     const set = new Set<string>();
-    students.forEach(s => {
-      const g = s.groupName?.trim() || (s.groupNumber ? `${s.groupNumber}모둠` : '1모둠');
-      set.add(g);
+    safeStudents.forEach(s => {
+      const g = getStudentGroupName(s);
+      if (g) set.add(g);
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-  }, [students]);
-
-  // Universal save dispatcher to prevent prop name mismatch
-  const saveRoster = (newRoster: Student[]) => {
-    if (onSaveStudents) onSaveStudents(newRoster);
-    if (onUpdateStudents) onUpdateStudents(newRoster);
-  };
+  }, [safeStudents]);
 
   // Real-time parsing of pasted text
   const parsedStudents = useMemo(() => {
@@ -88,7 +109,20 @@ export const RosterModal: React.FC<RosterModalProps> = ({
     return parseStudentRosterText(pasteText, pasteGroupName.trim() || undefined);
   }, [pasteText, pasteGroupName]);
 
+  // Filter students for list tab display
+  const displayedStudents = useMemo(() => {
+    if (filterGroup === 'all') return safeStudents;
+    return safeStudents.filter(s => getStudentGroupName(s) === filterGroup);
+  }, [safeStudents, filterGroup]);
+
+  // Early return ONLY after ALL hooks have been declared
   if (!isOpen) return null;
+
+  // Universal save dispatcher to prevent prop name mismatch
+  const saveRoster = (newRoster: Student[]) => {
+    if (onSaveStudents) onSaveStudents(newRoster);
+    if (onUpdateStudents) onUpdateStudents(newRoster);
+  };
 
   // 1. Paste Import Handler
   const handlePasteImport = () => {
@@ -108,12 +142,12 @@ export const RosterModal: React.FC<RosterModalProps> = ({
       finalRoster = parsedStudents;
     } else {
       // Append mode
-      const maxNum = students.reduce((max, s) => Math.max(max, s.number), 0);
+      const maxNum = safeStudents.reduce((max, s) => Math.max(max, s.number || 0), 0);
       const renumbered = parsedStudents.map((st, idx) => ({
         ...st,
         number: maxNum + idx + 1,
       }));
-      finalRoster = [...students, ...renumbered];
+      finalRoster = [...safeStudents, ...renumbered];
     }
 
     saveRoster(finalRoster);
@@ -137,7 +171,7 @@ export const RosterModal: React.FC<RosterModalProps> = ({
 
     const newStudent: Student = {
       id: `st-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      number: newNum || students.length + 1,
+      number: newNum || safeStudents.length + 1,
       name: newName.trim(),
       gender: newGender,
       groupName: gName,
@@ -145,7 +179,7 @@ export const RosterModal: React.FC<RosterModalProps> = ({
       note: newNote.trim(),
     };
 
-    const updated = [...students, newStudent].sort((a, b) => a.number - b.number);
+    const updated = [...safeStudents, newStudent].sort((a, b) => (a.number || 0) - (b.number || 0));
     saveRoster(updated);
     onShowToast(`✅ ${newStudent.number}번 ${newStudent.name} (${gName}) 학생이 추가되었습니다.`);
     setNewName('');
@@ -156,7 +190,7 @@ export const RosterModal: React.FC<RosterModalProps> = ({
   // 3. Delete Student Handler
   const handleDeleteStudent = (id: string, name: string) => {
     if (window.confirm(`${name} 학생을 명단에서 삭제하시겠습니까?`)) {
-      const updated = students.filter(s => s.id !== id);
+      const updated = safeStudents.filter(s => s.id !== id);
       saveRoster(updated);
       onShowToast(`🗑️ ${name} 학생이 삭제되었습니다.`);
     }
@@ -177,7 +211,7 @@ export const RosterModal: React.FC<RosterModalProps> = ({
     const numMatch = gName.match(/([0-9]+)/);
     const gNum = numMatch ? parseInt(numMatch[1], 10) : 1;
 
-    const updated = students.map(s => {
+    const updated = safeStudents.map(s => {
       if (s.id === studentId) {
         return { ...s, groupName: gName, groupNumber: gNum };
       }
@@ -205,7 +239,7 @@ export const RosterModal: React.FC<RosterModalProps> = ({
     const gNum = numMatch ? parseInt(numMatch[1], 10) : 1;
     const set = new Set(selectedStudentIdsForGroup);
 
-    const updated = students.map(s => {
+    const updated = safeStudents.map(s => {
       if (set.has(s.id)) {
         return { ...s, groupName: gName, groupNumber: gNum };
       }
@@ -219,18 +253,18 @@ export const RosterModal: React.FC<RosterModalProps> = ({
 
   // 7. Auto Split into N Classes (e.g. 2반, 3반)
   const handleAutoSplitClasses = (numClasses: number) => {
-    if (students.length === 0) return;
+    if (safeStudents.length === 0) return;
     const count = Math.max(2, Math.min(10, numClasses));
-    const perClass = Math.ceil(students.length / count);
+    const perClass = Math.ceil(safeStudents.length / count);
 
-    const updated = students.map((s, idx) => {
+    const updated = safeStudents.map((s, idx) => {
       const classIdx = Math.min(count, Math.floor(idx / perClass) + 1);
       const gName = `${classIdx}반`;
       return { ...s, groupName: gName, groupNumber: classIdx };
     });
 
     saveRoster(updated);
-    onShowToast(`✨ 전체 ${students.length}명이 ${count}개 반(1반~${count}반)으로 자동 분할되었습니다!`);
+    onShowToast(`✨ 전체 ${safeStudents.length}명이 ${count}개 반(1반~${count}반)으로 자동 분할되었습니다!`);
   };
 
   // 8. Range Assign Group (e.g. 1~10번 1반, 11~19번 2반)
@@ -244,7 +278,7 @@ export const RosterModal: React.FC<RosterModalProps> = ({
     const gNum = numMatch ? parseInt(numMatch[1], 10) : 1;
 
     let affected = 0;
-    const updated = students.map(s => {
+    const updated = safeStudents.map(s => {
       if (s.number >= start && s.number <= end) {
         affected++;
         return { ...s, groupName: name, groupNumber: gNum };
@@ -258,9 +292,9 @@ export const RosterModal: React.FC<RosterModalProps> = ({
 
   // 9. Auto Split Teams (모둠 - 4명씩 등)
   const handleAutoSplitTeams = (size: number) => {
-    if (students.length === 0) return;
+    if (safeStudents.length === 0) return;
     const perTeam = Math.max(2, Math.min(10, size));
-    const updated = students.map((s, idx) => {
+    const updated = safeStudents.map((s, idx) => {
       const gNum = Math.floor(idx / perTeam) + 1;
       const gName = `${gNum}모둠`;
       return { ...s, groupName: gName, groupNumber: gNum };
@@ -269,12 +303,6 @@ export const RosterModal: React.FC<RosterModalProps> = ({
     saveRoster(updated);
     onShowToast(`✨ ${perTeam}명씩 모둠(1모둠, 2모둠...)으로 재편성되었습니다!`);
   };
-
-  // Filter students for list tab display
-  const displayedStudents = useMemo(() => {
-    if (filterGroup === 'all') return students;
-    return students.filter(s => (s.groupName?.trim() || (s.groupNumber ? `${s.groupNumber}모둠` : '1모둠')) === filterGroup);
-  }, [students, filterGroup]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-3.5 sm:p-4 animate-in fade-in duration-200">
@@ -287,7 +315,7 @@ export const RosterModal: React.FC<RosterModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-sm sm:text-base text-[#3D3A35]">
-                학급 학생 명단 및 그룹/반 관리 (총 {students.length}명)
+                학급 학생 명단 및 그룹/반 관리 (총 {safeStudents.length}명)
               </h3>
               <p className="text-[11px] text-[#5D574F]">
                 다른 반 수업, 분반, 모둠 설정 및 과제별 그룹 지정 지원
@@ -313,7 +341,7 @@ export const RosterModal: React.FC<RosterModalProps> = ({
             }`}
           >
             <UserCheck className="w-3.5 h-3.5 text-[#2D6A4F]" />
-            <span>현재 명단 ({students.length}명)</span>
+            <span>현재 명단 ({safeStudents.length}명)</span>
           </button>
 
           <button
@@ -355,7 +383,7 @@ export const RosterModal: React.FC<RosterModalProps> = ({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white p-3 rounded-2xl border border-[#DCD5C8]">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-[#5D574F]">
-                    등록 학생: <b>총 {students.length}명</b>
+                    등록 학생: <b>총 {safeStudents.length}명</b>
                   </span>
                   <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#E8F0E4] text-[#2D6A4F] font-bold border border-[#A3B18A]">
                     {uniqueGroups.length}개 그룹/반 보유
@@ -467,7 +495,7 @@ export const RosterModal: React.FC<RosterModalProps> = ({
                         <span>추천:</span>
                         <button type="button" onClick={() => { setRangeStart(1); setRangeEnd(10); setRangeGroupName('1반'); }} className="underline hover:text-[#3D3A35]">1~10번 1반</button>
                         <span>•</span>
-                        <button type="button" onClick={() => { setRangeStart(11); setRangeEnd(students.length); setRangeGroupName('2반'); }} className="underline hover:text-[#3D3A35]">11번~끝 2반</button>
+                        <button type="button" onClick={() => { setRangeStart(11); setRangeEnd(safeStudents.length); setRangeGroupName('2반'); }} className="underline hover:text-[#3D3A35]">11번~끝 2반</button>
                       </div>
                     </div>
 
@@ -543,11 +571,11 @@ export const RosterModal: React.FC<RosterModalProps> = ({
                       : 'bg-white text-[#5D574F] border-[#DCD5C8] hover:bg-[#FAF9F5]'
                   }`}
                 >
-                  전체 ({students.length}명)
+                  전체 ({safeStudents.length}명)
                 </button>
 
                 {uniqueGroups.map((gName) => {
-                  const count = students.filter(s => (s.groupName || `${s.groupNumber || 1}모둠`) === gName).length;
+                  const count = safeStudents.filter(s => getStudentGroupName(s) === gName).length;
                   return (
                     <button
                       key={gName}
@@ -572,7 +600,7 @@ export const RosterModal: React.FC<RosterModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[360px] overflow-y-auto pr-1">
                 {displayedStudents.map((st) => {
                   const isChecked = selectedStudentIdsForGroup.includes(st.id);
-                  const currentGroupName = st.groupName || (st.groupNumber ? `${st.groupNumber}모둠` : '1반');
+                  const currentGroupName = getStudentGroupName(st);
 
                   return (
                     <div
@@ -907,7 +935,7 @@ export const RosterModal: React.FC<RosterModalProps> = ({
         {/* Modal Footer */}
         <div className="px-5 sm:px-6 py-3.5 bg-[#EAE5D8] border-t border-[#DCD5C8] flex items-center justify-between">
           <div className="text-[11px] text-[#5D574F] font-semibold">
-            <span>등록된 학생: <b>{students.length}명</b></span>
+            <span>등록된 학생: <b>{safeStudents.length}명</b></span>
             {uniqueGroups.length > 0 && (
               <span className="ml-2 text-[#2D6A4F] font-bold">({uniqueGroups.join(', ')})</span>
             )}

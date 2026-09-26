@@ -1298,10 +1298,9 @@ export default function App() {
         onClose={() => setIsSheetsModalOpen(false)}
         config={sheetsConfig}
         onSaveConfig={handleSaveSheetsConfig}
-        activeAssignment={activeAssignment}
-        students={students}
+        assignment={activeAssignment}
+        students={targetStudents}
         submissions={currentSubmissions}
-        classRoom={classRoom}
         onShowToast={showToast}
       />
 
@@ -1317,18 +1316,20 @@ export default function App() {
         isOpen={isPrintModalOpen}
         onClose={() => setIsPrintModalOpen(false)}
         classRoom={classRoom}
-        students={students}
-        assignments={assignments}
-        submissionsMap={submissionsMap}
+        assignment={activeAssignment}
+        students={targetStudents}
+        submissions={currentSubmissions}
       />
 
       <StudentDetailModal
         student={selectedStudentForDetail}
         isOpen={Boolean(selectedStudentForDetail)}
         onClose={() => setSelectedStudentForDetail(null)}
-        assignments={assignments}
-        submissionsMap={submissionsMap}
-        onUpdateStatus={(studentId, asgId, status, note) => {
+        currentStatus={selectedStudentForDetail && activeAssignment ? (currentSubmissions[selectedStudentForDetail.id]?.status || 'pending') : 'pending'}
+        currentNote={selectedStudentForDetail && activeAssignment ? (currentSubmissions[selectedStudentForDetail.id]?.note || '') : ''}
+        onSave={(studentId, status, note) => {
+          if (!activeAssignment) return;
+          const asgId = activeAssignment.id;
           const nowIso = new Date().toISOString();
           const asgSubs = submissionsMap[asgId] || {};
           const updatedSubItem: SubmissionItem = {
@@ -1359,6 +1360,7 @@ export default function App() {
             updatedMap
           );
         }}
+        onShowToast={showToast}
       />
 
       <AppSettingsModal
