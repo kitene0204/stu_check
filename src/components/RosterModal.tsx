@@ -19,12 +19,12 @@ import {
   Square
 } from 'lucide-react';
 import { Student } from '../types';
-import { parseStudentRosterText } from '../services/storageService';
+import { parseStudentRosterText, sanitizeStudents } from '../services/storageService';
 import { INITIAL_STUDENTS } from '../data/initialData';
 
 // Safe helper to extract group/class name from student object
 export const getStudentGroupName = (student: Student | null | undefined): string => {
-  if (!student) return '1모둠';
+  if (!student) return '1반';
   if (student.groupName != null) {
     const trimmed = String(student.groupName).trim();
     if (trimmed) return trimmed;
@@ -32,7 +32,7 @@ export const getStudentGroupName = (student: Student | null | undefined): string
   if (student.groupNumber != null && !isNaN(Number(student.groupNumber))) {
     return `${student.groupNumber}모둠`;
   }
-  return '1모둠';
+  return '1반';
 };
 
 interface RosterModalProps {
@@ -52,8 +52,10 @@ export const RosterModal: React.FC<RosterModalProps> = ({
   onUpdateStudents,
   onShowToast,
 }) => {
-  // Safe array of students
-  const safeStudents = useMemo(() => Array.isArray(students) ? students : [], [students]);
+  // Safe array of students - sanitized so every student is guaranteed non-null with valid fields
+  const safeStudents = useMemo(() => {
+    return sanitizeStudents(students);
+  }, [students]);
 
   // Tab navigation: 'list' | 'paste' | 'add'
   const [activeTab, setActiveTab] = useState<'list' | 'paste' | 'add'>('list');
@@ -84,6 +86,18 @@ export const RosterModal: React.FC<RosterModalProps> = ({
   const [newGender, setNewGender] = useState<'M' | 'F'>('M');
   const [newGroupName, setNewGroupName] = useState('1반');
   const [newNote, setNewNote] = useState('');
+
+  // Safe window.confirm wrapper for iframes and sandboxes
+  const safeConfirm = (msg: string): boolean => {
+    try {
+      if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+        return window.confirm(msg);
+      }
+    } catch {
+      return true;
+    }
+    return true;
+  };
 
   // Sync rangeEnd and newNum when safeStudents changes
   useEffect(() => {
@@ -189,7 +203,7 @@ export const RosterModal: React.FC<RosterModalProps> = ({
 
   // 3. Delete Student Handler
   const handleDeleteStudent = (id: string, name: string) => {
-    if (window.confirm(`${name} 학생을 명단에서 삭제하시겠습니까?`)) {
+    if (safeConfirm(`${name} 학생을 명단에서 삭제하시겠습니까?`)) {
       const updated = safeStudents.filter(s => s.id !== id);
       saveRoster(updated);
       onShowToast(`🗑️ ${name} 학생이 삭제되었습니다.`);
@@ -198,7 +212,7 @@ export const RosterModal: React.FC<RosterModalProps> = ({
 
   // 4. Reset to Default Handler
   const handleResetToDefault = () => {
-    if (window.confirm('기본 샘플 학급 명단(24명)으로 초기화하시겠습니까?')) {
+    if (safeConfirm('기본 샘플 학급 명단으로 초기화하시겠습니까?')) {
       saveRoster(INITIAL_STUDENTS);
       onShowToast('🔄 기본 샘플 명단으로 재설정되었습니다.');
     }
@@ -598,13 +612,17 @@ export const RosterModal: React.FC<RosterModalProps> = ({
 
               {/* Student Cards Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[360px] overflow-y-auto pr-1">
-                {displayedStudents.map((st) => {
-                  const isChecked = selectedStudentIdsForGroup.includes(st.id);
+                {displayedStudents.map((st, idx) => {
+                  if (!st) return null;
+                  const stId = st.id || `st-item-${idx}`;
+                  const isChecked = Boolean(selectedStudentIdsForGroup && selectedStudentIdsForGroup.includes(stId));
                   const currentGroupName = getStudentGroupName(st);
+                  const stNum = st.number != null && !isNaN(st.number) ? st.number : idx + 1;
+                  const stName = st.name || `학생 ${stNum}`;
 
                   return (
                     <div
-                      key={st.id}
+                      key={stId}
                       className={`p-3 bg-white rounded-2xl border transition-all flex items-center justify-between shadow-2xs ${
                         isChecked ? 'border-[#2D6A4F] bg-[#EBF5EE]/30' : 'border-[#DCD5C8] hover:border-[#A3B18A]'
                       }`}
@@ -615,9 +633,9 @@ export const RosterModal: React.FC<RosterModalProps> = ({
                           type="button"
                           onClick={() => {
                             if (isChecked) {
-                              setSelectedStudentIdsForGroup(prev => prev.filter(id => id !== st.id));
+                              setSelectedStudentIdsForGroup(prev => prev.filter(id => id !== stId));
                             } else {
-                              setSelectedStudentIdsForGroup(prev => [...prev, st.id]);
+                              setSelectedStudentIdsForGroup(prev => [...prev, stId]);
                             }
                           }}
                           className="text-[#A89F91] hover:text-[#2D6A4F] cursor-pointer shrink-0"
@@ -631,12 +649,12 @@ export const RosterModal: React.FC<RosterModalProps> = ({
                         </button>
 
                         <span className="w-7 h-7 rounded-xl bg-[#FAF9F6] border border-[#DCD5C8] text-xs font-bold text-[#5D574F] flex items-center justify-center font-mono shrink-0">
-                          {st.number}
+                          {stNum}
                         </span>
 
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5 truncate">
-                            <span className="text-xs font-bold text-[#3D3A35]">{st.name}</span>
+                            <span className="text-xs font-bold text-[#3D3A35]">{stName}</span>
                             {st.gender && (
                               <span className={`text-[10px] px-1 py-0.2 rounded font-semibold ${st.gender === 'M' ? 'bg-blue-50 text-blue-700' : 'bg-pink-50 text-pink-700'}`}>
                                 {st.gender === 'M' ? '남' : '여'}
@@ -651,7 +669,7 @@ export const RosterModal: React.FC<RosterModalProps> = ({
 
                       {/* Right: Group Badge (Clickable to Edit) & Delete */}
                       <div className="flex items-center gap-1.5 shrink-0">
-                        {editingStudentId === st.id ? (
+                        {editingStudentId === stId ? (
                           <div className="flex items-center gap-1 bg-[#FAF3EB] p-1 rounded-xl border border-[#BC6C25]/40 animate-in fade-in">
                             <input
                               type="text"
@@ -661,13 +679,13 @@ export const RosterModal: React.FC<RosterModalProps> = ({
                               className="w-14 px-1.5 py-0.5 text-[11px] font-bold bg-white border border-[#BC6C25] rounded text-center"
                               autoFocus
                               onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleUpdateStudentGroup(st.id, editingGroupNameInput);
+                                if (e.key === 'Enter') handleUpdateStudentGroup(stId, editingGroupNameInput);
                                 if (e.key === 'Escape') setEditingStudentId(null);
                               }}
                             />
                             <button
                               type="button"
-                              onClick={() => handleUpdateStudentGroup(st.id, editingGroupNameInput)}
+                              onClick={() => handleUpdateStudentGroup(stId, editingGroupNameInput)}
                               className="p-1 bg-[#2D6A4F] text-white rounded text-[10px] font-bold hover:bg-[#23533E]"
                             >
                               <Check className="w-3 h-3" />
@@ -684,7 +702,7 @@ export const RosterModal: React.FC<RosterModalProps> = ({
                           <button
                             type="button"
                             onClick={() => {
-                              setEditingStudentId(st.id);
+                              setEditingStudentId(stId);
                               setEditingGroupNameInput(currentGroupName);
                             }}
                             className="text-[10px] bg-[#FAF3EB] hover:bg-[#F5E6D3] text-[#8C4A1A] border border-[#BC6C25]/30 px-2 py-0.5 rounded-lg font-bold flex items-center gap-1 cursor-pointer transition-all hover:scale-105"
@@ -696,7 +714,7 @@ export const RosterModal: React.FC<RosterModalProps> = ({
                         )}
 
                         <button
-                          onClick={() => handleDeleteStudent(st.id, st.name)}
+                          onClick={() => handleDeleteStudent(stId, stName)}
                           className="p-1.5 text-[#A89F91] hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                           title="학생 삭제"
                         >

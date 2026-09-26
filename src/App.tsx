@@ -47,6 +47,7 @@ import {
   saveSupabaseConfig,
   fetchServerStoreData,
   saveServerStoreData,
+  sanitizeStudents,
 } from './services/storageService';
 
 import {
@@ -211,8 +212,9 @@ export default function App() {
 
           if (remote.hasRemoteData) {
             if (remote.students && Array.isArray(remote.students)) {
-              setStudents(remote.students);
-              localStorage.setItem('class_tracker_students', JSON.stringify(remote.students));
+              const clean = sanitizeStudents(remote.students);
+              setStudents(clean);
+              localStorage.setItem('class_tracker_students', JSON.stringify(clean));
             }
 
             if (remote.assignments && Array.isArray(remote.assignments)) {
@@ -253,8 +255,9 @@ export default function App() {
         if (serverData && (serverData.students || serverData.classRoom)) {
           if (!localStorage.getItem('class_tracker_initialized_flag')) {
             if (serverData.students && Array.isArray(serverData.students) && serverData.students.length > 0) {
-              setStudents(serverData.students);
-              localStorage.setItem('class_tracker_students', JSON.stringify(serverData.students));
+              const clean = sanitizeStudents(serverData.students);
+              setStudents(clean);
+              localStorage.setItem('class_tracker_students', JSON.stringify(clean));
             }
             if (serverData.classRoom) {
               setClassRoom(serverData.classRoom);
@@ -295,8 +298,9 @@ export default function App() {
           if (!payload) return;
 
           if (payload.students && Array.isArray(payload.students) && payload.students.length > 0) {
-            setStudents(payload.students);
-            localStorage.setItem('class_tracker_students', JSON.stringify(payload.students));
+            const clean = sanitizeStudents(payload.students);
+            setStudents(clean);
+            localStorage.setItem('class_tracker_students', JSON.stringify(clean));
           }
           if (payload.submissionsMap) {
             setSubmissionsMap(payload.submissionsMap);
@@ -323,8 +327,9 @@ export default function App() {
         try {
           const payload = JSON.parse(e.data);
           if (payload && payload.students && Array.isArray(payload.students)) {
-            setStudents(payload.students);
-            localStorage.setItem('class_tracker_students', JSON.stringify(payload.students));
+            const clean = sanitizeStudents(payload.students);
+            setStudents(clean);
+            localStorage.setItem('class_tracker_students', JSON.stringify(clean));
             setSyncState('synced');
             updateLastSyncedTime();
             setTimeout(() => setSyncState('idle'), 1500);
@@ -755,19 +760,20 @@ export default function App() {
   };
 
   const handleUpdateStudents = async (updatedStudents: Student[]) => {
+    const clean = sanitizeStudents(updatedStudents);
     // 1. Instant local state update for immediate UI re-rendering
-    setStudents(updatedStudents);
+    setStudents(clean);
     
     // 2. Persist to LocalStorage and Server store
-    saveStudents(updatedStudents, classRoom.id);
+    saveStudents(clean, classRoom.id);
 
     // 3. Sync to Supabase if configured
     if (supabaseConfig.isEnabled && supabaseConfig.url) {
       try {
         setSyncState('syncing');
-        const ok = await syncStudentsToSupabase(supabaseConfig, classRoom.id, updatedStudents);
+        const ok = await syncStudentsToSupabase(supabaseConfig, classRoom.id, clean);
         if (ok) {
-          showToast(`⚡ Supabase 클라우드에 ${updatedStudents.length}명의 명단이 실시간 저장되었습니다!`);
+          showToast(`⚡ Supabase 클라우드에 ${clean.length}명의 명단이 실시간 저장되었습니다!`);
         }
         setSyncState('synced');
         setTimeout(() => setSyncState('idle'), 2000);

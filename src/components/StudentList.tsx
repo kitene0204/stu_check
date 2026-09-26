@@ -30,21 +30,23 @@ export const StudentList: React.FC<StudentListProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-[#EEECE6]">
-            {students.map((student) => {
+            {students.map((student, idx) => {
+              if (!student) return null;
               const sub = submissions[student.id] || { status: 'pending' };
               const isSubmitted = sub.status === 'submitted';
               const isPending = sub.status === 'pending';
               const isResubmit = sub.status === 'resubmit';
+              const numVal = student.number != null && !isNaN(Number(student.number)) ? Number(student.number) : idx + 1;
 
               return (
                 <tr 
-                  key={student.id} 
+                  key={student.id || `st-list-${idx}`} 
                   className={`hover:bg-white/80 transition-colors ${
                     isPending ? 'bg-[#FAF3F0]/40' : isResubmit ? 'bg-[#FEF8EC]/40' : ''
                   }`}
                 >
                   <td className="py-3 px-4 text-center font-bold text-[#A89F91]">
-                    {student.number.toString().padStart(2, '0')}
+                    {numVal.toString().padStart(2, '0')}
                   </td>
                   <td className="py-3 px-4 font-semibold text-[#3D3A35]">
                     {student.name}

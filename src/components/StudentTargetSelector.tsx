@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Users, CheckCircle2, Circle, Search, X, Check, XCircle, CheckSquare, FolderPlus } from 'lucide-react';
 import { Student } from '../types';
+import { sanitizeStudents } from '../services/storageService';
 
 interface StudentTargetSelectorProps {
   students: Student[];
@@ -23,27 +24,30 @@ export const StudentTargetSelector: React.FC<StudentTargetSelectorProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Safe students
+  const safeStudents = useMemo(() => sanitizeStudents(students), [students]);
+
   // Extract distinct groups/classes in roster
   const availableGroupNames = useMemo(() => {
     const groups = new Set<string>();
-    students.forEach(s => {
-      const g = s.groupName?.trim() || (s.groupNumber ? `${s.groupNumber}모둠` : '1모둠');
+    safeStudents.forEach(s => {
+      const g = s.groupName?.trim() || (s.groupNumber ? `${s.groupNumber}모둠` : '1반');
       groups.add(g);
     });
     return Array.from(groups).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-  }, [students]);
+  }, [safeStudents]);
 
   // Filter students based on search
   const filteredStudents = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return students;
-    return students.filter(s => 
-      s.name.toLowerCase().includes(query) ||
-      String(s.number).includes(query) ||
+    if (!query) return safeStudents;
+    return safeStudents.filter(s => 
+      (s.name && s.name.toLowerCase().includes(query)) ||
+      (s.number != null && String(s.number).includes(query)) ||
       (s.groupName && s.groupName.toLowerCase().includes(query)) ||
-      (s.groupNumber && `${s.groupNumber}모둠`.includes(query))
+      (s.groupNumber != null && `${s.groupNumber}모둠`.includes(query))
     );
-  }, [students, searchQuery]);
+  }, [safeStudents, searchQuery]);
 
   const handleToggleStudent = (studentId: string) => {
     if (selectedStudentIds.includes(studentId)) {
@@ -54,7 +58,7 @@ export const StudentTargetSelector: React.FC<StudentTargetSelectorProps> = ({
   };
 
   const handleSelectAll = () => {
-    onChangeSelectedStudentIds(students.map(s => s.id));
+    onChangeSelectedStudentIds(safeStudents.map(s => s.id));
   };
 
   const handleDeselectAll = () => {
@@ -62,15 +66,15 @@ export const StudentTargetSelector: React.FC<StudentTargetSelectorProps> = ({
   };
 
   const handleSelectOdd = () => {
-    onChangeSelectedStudentIds(students.filter(s => s.number % 2 !== 0).map(s => s.id));
+    onChangeSelectedStudentIds(safeStudents.filter(s => s.number % 2 !== 0).map(s => s.id));
   };
 
   const handleSelectEven = () => {
-    onChangeSelectedStudentIds(students.filter(s => s.number % 2 === 0).map(s => s.id));
+    onChangeSelectedStudentIds(safeStudents.filter(s => s.number % 2 === 0).map(s => s.id));
   };
 
   const handleSelectGroup = (gName: string) => {
-    const groupStudentIds = students.filter(s => (s.groupName || `${s.groupNumber || 1}모둠`) === gName).map(s => s.id);
+    const groupStudentIds = safeStudents.filter(s => (s.groupName || `${s.groupNumber || 1}모둠`) === gName).map(s => s.id);
     const allSelected = groupStudentIds.every(id => selectedStudentIds.includes(id));
     if (allSelected) {
       onChangeSelectedStudentIds(selectedStudentIds.filter(id => !groupStudentIds.includes(id)));

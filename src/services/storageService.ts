@@ -29,6 +29,23 @@ export const getSupabaseClient = (config?: SupabaseConfig): SupabaseClient | nul
 
 // ================= LOCAL STORAGE LOAD / SAVE =================
 
+export const sanitizeStudents = (raw: any): Student[] => {
+  if (!Array.isArray(raw)) return INITIAL_STUDENTS;
+  const filtered = raw.filter((s): s is Student => s != null && typeof s === 'object');
+  if (filtered.length === 0) return INITIAL_STUDENTS;
+  return filtered.map((s, idx) => ({
+    id: typeof s.id === 'string' && s.id ? s.id : `st-${Date.now()}-${idx}`,
+    name: typeof s.name === 'string' && s.name.trim() ? s.name.trim() : `학생 ${idx + 1}`,
+    number: typeof s.number === 'number' && !isNaN(s.number) ? s.number : (idx + 1),
+    gender: s.gender === 'F' ? 'F' : 'M',
+    groupName: typeof s.groupName === 'string' && s.groupName.trim()
+      ? s.groupName.trim()
+      : (s.groupNumber != null && !isNaN(Number(s.groupNumber)) ? `${s.groupNumber}모둠` : '1반'),
+    groupNumber: typeof s.groupNumber === 'number' && !isNaN(s.groupNumber) ? s.groupNumber : 1,
+    note: typeof s.note === 'string' ? s.note : '',
+  }));
+};
+
 export const loadClassRoom = (): ClassRoom => {
   try {
     const data = localStorage.getItem(STORAGE_KEYS.CLASS);
@@ -55,12 +72,12 @@ export const loadStudents = (): Student[] => {
     if (data !== null) {
       const parsed = JSON.parse(data);
       if (Array.isArray(parsed)) {
-        return parsed;
+        return sanitizeStudents(parsed);
       }
     }
-    return INITIAL_STUDENTS;
+    return sanitizeStudents(INITIAL_STUDENTS);
   } catch {
-    return INITIAL_STUDENTS;
+    return sanitizeStudents(INITIAL_STUDENTS);
   }
 };
 

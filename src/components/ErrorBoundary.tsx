@@ -35,6 +35,17 @@ export class ErrorBoundary extends React.Component<Props, State> {
     this.setState({ hasError: false, error: null });
   };
 
+  private handleClearAndReset = () => {
+    try {
+      localStorage.removeItem('class_tracker_students');
+      localStorage.removeItem('class_tracker_assignments');
+      localStorage.removeItem('class_tracker_submissions');
+    } catch {
+      // ignore
+    }
+    window.location.reload();
+  };
+
   public render() {
     if (this.state.hasError) {
       return (
@@ -58,7 +69,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
               </div>
             )}
 
-            <div className="flex gap-2 justify-center pt-2">
+            <div className="flex flex-wrap gap-2 justify-center pt-2">
               <button
                 type="button"
                 onClick={this.handleReload}
@@ -66,6 +77,13 @@ export class ErrorBoundary extends React.Component<Props, State> {
               >
                 <RefreshCw className="w-4 h-4" />
                 <span>페이지 새로고침</span>
+              </button>
+              <button
+                type="button"
+                onClick={this.handleClearAndReset}
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-xl text-xs font-semibold cursor-pointer active:scale-95"
+              >
+                <span>데이터 초기화 복원</span>
               </button>
               <button
                 type="button"

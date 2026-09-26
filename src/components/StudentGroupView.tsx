@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Users, CheckCircle2, AlertCircle, MessageSquare, Check } from 'lucide-react';
 import { Student, SubmissionStatus } from '../types';
+import { sanitizeStudents } from '../services/storageService';
 
 interface StudentGroupViewProps {
   students: Student[];
@@ -15,10 +16,13 @@ export const StudentGroupView: React.FC<StudentGroupViewProps> = ({
   onToggleStatus,
   onOpenStudentDetail,
 }) => {
+  const safeStudents = useMemo(() => sanitizeStudents(students), [students]);
+
   // Group students by groupName or groupNumber
   const groups: Record<string, Student[]> = {};
 
-  students.forEach((student) => {
+  safeStudents.forEach((student) => {
+    if (!student) return;
     const g = student.groupName?.trim() || `${student.groupNumber || 1}모둠`;
     if (!groups[g]) groups[g] = [];
     groups[g].push(student);

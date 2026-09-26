@@ -17,20 +17,22 @@ export const StudentGrid: React.FC<StudentGridProps> = ({
 }) => {
   return (
     <div className="grid grid-cols-2 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3.5 md:gap-4 pb-20 md:pb-12">
-      {students.map((student) => {
+      {students.map((student, idx) => {
+        if (!student) return null;
         const sub = submissions[student.id] || { status: 'pending' };
         const isSubmitted = sub.status === 'submitted';
         const isPending = sub.status === 'pending';
         const isResubmit = sub.status === 'resubmit';
         const isExcused = sub.status === 'excused';
 
-        const formattedNumber = `NO. ${student.number.toString().padStart(2, '0')}`;
+        const numVal = student.number != null && !isNaN(Number(student.number)) ? Number(student.number) : idx + 1;
+        const formattedNumber = `NO. ${numVal.toString().padStart(2, '0')}`;
         const hasNote = Boolean(sub.note || student.note);
 
         return (
           <div
-            key={student.id}
-            id={`student-card-${student.number}`}
+            key={student.id || `st-grid-${idx}`}
+            id={`student-card-${numVal}`}
             onClick={() => onToggleStatus(student.id)}
             className={`min-h-[105px] sm:min-h-[120px] md:min-h-[130px] p-3 sm:p-4 rounded-2xl border-2 transition-all duration-150 select-none cursor-pointer flex flex-col justify-between relative shadow-xs active:scale-[0.97] touch-manipulation ${
               isSubmitted

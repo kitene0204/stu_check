@@ -21,10 +21,18 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   onSave,
   onShowToast,
 }) => {
-  if (!isOpen || !student) return null;
-
   const [status, setStatus] = useState<SubmissionStatus>(currentStatus);
   const [note, setNote] = useState<string>(currentNote || '');
+
+  // Keep state in sync when student or currentStatus changes
+  React.useEffect(() => {
+    if (student) {
+      setStatus(currentStatus);
+      setNote(currentNote || '');
+    }
+  }, [student, currentStatus, currentNote]);
+
+  if (!isOpen || !student) return null;
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
