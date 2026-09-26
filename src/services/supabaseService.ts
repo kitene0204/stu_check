@@ -37,6 +37,7 @@ export const fetchSupabaseData = async (
   assignments: Assignment[];
   submissionsMap: SubmissionMap;
   classRoom?: Partial<ClassRoom>;
+  resolvedClassId?: string;
   hasRemoteData: boolean;
 }> => {
   const client = initSupabase(config);
@@ -48,18 +49,29 @@ export const fetchSupabaseData = async (
   let remoteAssignments: Assignment[] = [];
   const submissionsMap: SubmissionMap = {};
   let remoteClassRoom: Partial<ClassRoom> | undefined = undefined;
+  let resolvedClassId = classRoomId;
   let hasRemoteData = false;
 
-  // 1. Try to fetch from class_metadata
+  // 1. Try to fetch from class_metadata (first matching classRoomId, or fallback to latest class in DB)
   try {
-    let metaQuery = client.from('class_metadata').select('*');
+    let metaDataRows: any[] | null = null;
     if (classRoomId) {
-      metaQuery = metaQuery.eq('class_id', classRoomId);
+      const { data } = await client.from('class_metadata').select('*').eq('class_id', classRoomId).limit(1);
+      if (data && data.length > 0) {
+        metaDataRows = data;
+      }
     }
-    const { data: metaDataRows, error: metaError } = await metaQuery.limit(1);
 
-    if (!metaError && metaDataRows && metaDataRows.length > 0) {
+    if (!metaDataRows || metaDataRows.length === 0) {
+      const { data: latestRows } = await client.from('class_metadata').select('*').order('updated_at', { ascending: false }).limit(1);
+      if (latestRows && latestRows.length > 0) {
+        metaDataRows = latestRows;
+      }
+    }
+
+    if (metaDataRows && metaDataRows.length > 0) {
       const metaData = metaDataRows[0];
+      resolvedClassId = metaData.class_id;
       hasRemoteData = true;
       if (metaData.students && Array.isArray(metaData.students)) {
         remoteStudents = metaData.students;
@@ -69,20 +81,22 @@ export const fetchSupabaseData = async (
       }
       if (metaData.classroom_data) {
         remoteClassRoom = metaData.classroom_data;
+      } else {
+        remoteClassRoom = { id: metaData.class_id };
       }
     }
   } catch (e) {
-    // class_metadata table may not exist yet, proceed
+    console.warn('class_metadata fetch error:', e);
   }
 
   // 2. Try to fetch from class_students table if students array still empty
-  if (remoteStudents.length === 0) {
+  if (remoteStudents.length === 0 && resolvedClassId) {
     try {
-      let stQuery = client.from('class_students').select('*');
-      if (classRoomId) {
-        stQuery = stQuery.eq('class_id', classRoomId);
-      }
-      const { data: studentsData, error: studentsError } = await stQuery.order('number', { ascending: true });
+      const { data: studentsData, error: studentsError } = await client
+        .from('class_students')
+        .select('*')
+        .eq('class_id', resolvedClassId)
+        .order('number', { ascending: true });
 
       if (!studentsError && studentsData && studentsData.length > 0) {
         hasRemoteData = true;
@@ -103,8 +117,8 @@ export const fetchSupabaseData = async (
   // 3. Try to fetch from class_submissions
   try {
     let subQuery = client.from('class_submissions').select('*');
-    if (classRoomId) {
-      subQuery = subQuery.eq('class_id', classRoomId);
+    if (resolvedClassId) {
+      subQuery = subQuery.eq('class_id', resolvedClassId);
     }
     const { data: subsData, error: subsError } = await subQuery;
 
@@ -130,6 +144,7 @@ export const fetchSupabaseData = async (
     assignments: remoteAssignments,
     submissionsMap,
     classRoom: remoteClassRoom,
+    resolvedClassId,
     hasRemoteData,
   };
 };

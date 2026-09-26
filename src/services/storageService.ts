@@ -140,14 +140,14 @@ export const loadSupabaseConfig = (): SupabaseConfig => {
     }
 
     return {
-      url: 'https://zrovysdgefsrlvmmiuha.supabase.co',
-      anonKey: 'sb_publishable_5Rd9NJicBZ6EddIEtCA7Xw_f0_9UYFW',
+      url: 'https://lqajnsqoovngfgabalkj.supabase.co',
+      anonKey: 'sb_publishable_DcAlnHgLYSd92ICS66z3RA_DvrzyPhX',
       isEnabled: true
     };
   } catch {
     return {
-      url: 'https://zrovysdgefsrlvmmiuha.supabase.co',
-      anonKey: 'sb_publishable_5Rd9NJicBZ6EddIEtCA7Xw_f0_9UYFW',
+      url: 'https://lqajnsqoovngfgabalkj.supabase.co',
+      anonKey: 'sb_publishable_DcAlnHgLYSd92ICS66z3RA_DvrzyPhX',
       isEnabled: true
     };
   }

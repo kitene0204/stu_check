@@ -9,31 +9,184 @@
   },
   "students": [
     {
-      "id": "st-01",
+      "id": "st-1790391905404-ux76x-0",
+      "name": "강윤찬",
+      "note": "",
       "number": 1,
-      "name": "이창민",
-      "gender": "M",
-      "groupNumber": 1,
-      "note": ""
+      "groupNumber": 1
     },
     {
-      "id": "st-02",
+      "id": "st-1790391905404-kqkje-1",
+      "name": "강주연",
+      "note": "",
       "number": 2,
-      "name": "강경욱",
-      "gender": "M",
-      "groupNumber": 1,
-      "note": ""
+      "groupNumber": 1
+    },
+    {
+      "id": "st-1790391905404-wenoe-2",
+      "name": "김민지",
+      "note": "",
+      "number": 3,
+      "groupNumber": 1
+    },
+    {
+      "id": "st-1790391905404-0qs1p-3",
+      "name": "김진후",
+      "note": "",
+      "number": 4,
+      "groupNumber": 1
+    },
+    {
+      "id": "st-1790391905404-q0bac-4",
+      "name": "김현지",
+      "note": "",
+      "number": 5,
+      "groupNumber": 2
+    },
+    {
+      "id": "st-1790391905404-hbeck-5",
+      "name": "박채현",
+      "note": "",
+      "number": 6,
+      "groupNumber": 2
+    },
+    {
+      "id": "st-1790391905404-a69at-6",
+      "name": "성서아",
+      "note": "",
+      "number": 7,
+      "groupNumber": 2
+    },
+    {
+      "id": "st-1790391905404-5gtay-7",
+      "name": "송다정",
+      "note": "",
+      "number": 8,
+      "groupNumber": 2
+    },
+    {
+      "id": "st-1790391905404-cc7iu-8",
+      "name": "엄호준",
+      "note": "",
+      "number": 9,
+      "groupNumber": 3
+    },
+    {
+      "id": "st-1790391905404-capsv-9",
+      "name": "윤시우",
+      "note": "",
+      "number": 10,
+      "groupNumber": 3
+    },
+    {
+      "id": "st-1790391905404-g45r3-10",
+      "name": "이솔빛나",
+      "note": "",
+      "number": 11,
+      "groupNumber": 3
+    },
+    {
+      "id": "st-1790391905404-e5bx9-11",
+      "name": "이정",
+      "note": "",
+      "number": 12,
+      "groupNumber": 3
+    },
+    {
+      "id": "st-1790391905404-en1ue-12",
+      "name": "전성후",
+      "note": "",
+      "number": 13,
+      "groupNumber": 4
+    },
+    {
+      "id": "st-1790391905404-zccdt-13",
+      "name": "정혜원",
+      "note": "",
+      "number": 14,
+      "groupNumber": 4
+    },
+    {
+      "id": "st-1790391905404-ichxu-14",
+      "name": "최예은",
+      "note": "",
+      "number": 15,
+      "groupNumber": 4
+    },
+    {
+      "id": "st-1790391905404-l94pt-15",
+      "name": "한태은",
+      "note": "",
+      "number": 16,
+      "groupNumber": 4
+    },
+    {
+      "id": "st-1790391905404-zni8g-16",
+      "name": "허은서",
+      "note": "",
+      "number": 17,
+      "groupNumber": 5
+    },
+    {
+      "id": "st-1790391905404-e0kq3-17",
+      "name": "황혜리",
+      "note": "",
+      "number": 18,
+      "groupNumber": 5
+    },
+    {
+      "id": "st-1790391905404-2xv3t-18",
+      "name": "김세은",
+      "note": "",
+      "number": 19,
+      "groupNumber": 5
     }
   ],
   "assignments": [
     {
-      "id": "asg-test",
-      "classId": "class-6-1-2026",
-      "title": "Test",
+      "id": "asg-1790391882745",
+      "title": "중학교 입학원서 - 주민등록등본",
+      "dueDate": "2026-09-30",
       "category": "과제",
-      "dueDate": "2026-08-26",
+      "createdAt": "2026-09-26T03:04:42.745Z",
+      "description": ""
+    },
+    {
+      "id": "asg-1790392364465",
+      "title": "가족관계 증명서",
+      "classId": "class-3-2-2026",
+      "dueDate": "2026-09-26",
+      "category": "과제",
+      "createdAt": "2026-09-26T03:12:44.465Z",
+      "targetType": "custom",
       "description": "",
-      "createdAt": "2026-08-26T08:35:24.470Z"
+      "targetStudentIds": [
+        "st-1790391905404-ux76x-0",
+        "st-1790391905404-hbeck-5",
+        "st-1790391905404-a69at-6",
+        "st-1790391905404-5gtay-7",
+        "st-1790391905404-cc7iu-8",
+        "st-1790391905404-capsv-9",
+        "st-1790391905404-e5bx9-11",
+        "st-1790391905404-zccdt-13"
+      ]
+    },
+    {
+      "id": "asg-1790392859801",
+      "title": "미등재 사유서",
+      "classId": "class-3-2-2026",
+      "dueDate": "2026-09-26",
+      "category": "과제",
+      "createdAt": "2026-09-26T03:20:59.801Z",
+      "targetType": "custom",
+      "description": "",
+      "targetStudentIds": [
+        "st-1790391905404-ux76x-0",
+        "st-1790391905404-hbeck-5",
+        "st-1790391905404-a69at-6",
+        "st-1790391905404-5gtay-7",
+        "st-1790391905404-zccdt-13"
+      ]
     }
   ],
   "submissionsMap": {
@@ -43,6 +196,30 @@
       },
       "st-02": {
         "status": "pending"
+      }
+    },
+    "asg-1790392859801": {
+      "st-1790391905404-ux76x-0": {
+        "status": "submitted",
+        "updatedAt": "2026-09-26T03:21:02.234+00:00"
+      },
+      "st-1790391905404-hbeck-5": {
+        "status": "submitted",
+        "updatedAt": "2026-09-26T03:21:03.401+00:00"
+      },
+      "st-1790391905404-a69at-6": {
+        "status": "submitted",
+        "updatedAt": "2026-09-26T03:21:04.103+00:00"
+      },
+      "st-1790391905404-5gtay-7": {
+        "status": "submitted",
+        "updatedAt": "2026-09-26T03:21:05.314+00:00"
+      }
+    },
+    "asg-1790391882745": {
+      "st-1790391905404-ux76x-0": {
+        "status": "submitted",
+        "updatedAt": "2026-09-26T03:25:16.696+00:00"
       }
     }
   },
@@ -54,5 +231,6 @@
   "sheetsConfig": {
     "autoSyncEnabled": true
   },
-  "updatedAt": "2026-08-26T08:35:24.471Z"
+  "updatedAt": "2026-09-26T03:25:17.314Z",
+  "classId": "class-6-1-2026"
 }

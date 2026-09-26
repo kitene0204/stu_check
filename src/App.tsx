@@ -181,9 +181,13 @@ export default function App() {
               localStorage.setItem('class_tracker_submissions', JSON.stringify(remote.submissionsMap));
             }
 
-            if (remote.classRoom) {
+            if (remote.classRoom || remote.resolvedClassId) {
               setClassRoom(prev => {
-                const merged = { ...prev, ...remote.classRoom };
+                const merged = { 
+                  ...prev, 
+                  ...(remote.classRoom || {}),
+                  id: remote.resolvedClassId || remote.classRoom?.id || prev.id
+                };
                 localStorage.setItem('class_tracker_classroom', JSON.stringify(merged));
                 return merged;
               });
@@ -362,7 +366,8 @@ export default function App() {
           const asgSubs = prev[remoteSub.assignment_id] || {};
           const currentItem = asgSubs[remoteSub.student_id];
           
-          if (currentItem && new Date(currentItem.updatedAt || 0).getTime() >= new Date(remoteSub.updated_at).getTime()) {
+          // Skip only if status and note are already identical
+          if (currentItem && currentItem.status === remoteSub.status && currentItem.note === (remoteSub.note || undefined)) {
             return prev;
           }
 
@@ -422,21 +427,28 @@ export default function App() {
       }
     );
 
-    // Periodic Cloud Sync Interval (Every 3.5 seconds) for guaranteed cross-browser freshness
+    // Periodic Cloud Sync Interval (Every 3 seconds) for guaranteed cross-browser freshness
     const supabasePollInterval = setInterval(async () => {
       try {
         const remote = await fetchSupabaseData(supabaseConfig, classRoom.id);
         if (remote.hasRemoteData) {
-          if (remote.students && Array.isArray(remote.students)) {
+          if (remote.resolvedClassId && remote.resolvedClassId !== classRoom.id) {
+            setClassRoom(prev => {
+              const u = { ...prev, id: remote.resolvedClassId! };
+              saveClassRoom(u);
+              return u;
+            });
+          }
+          if (remote.students && Array.isArray(remote.students) && remote.students.length > 0) {
             setStudents(prev => {
               if (JSON.stringify(prev) !== JSON.stringify(remote.students)) {
-                saveStudents(remote.students, classRoom.id);
+                saveStudents(remote.students, remote.resolvedClassId || classRoom.id);
                 return remote.students;
               }
               return prev;
             });
           }
-          if (remote.assignments && Array.isArray(remote.assignments)) {
+          if (remote.assignments && Array.isArray(remote.assignments) && remote.assignments.length > 0) {
             setAssignments(prev => {
               if (JSON.stringify(prev) !== JSON.stringify(remote.assignments)) {
                 saveAssignments(remote.assignments);
@@ -460,13 +472,36 @@ export default function App() {
       } catch (e) {
         // silent
       }
-    }, 3500);
+    }, 3000);
+
+    // Mobile Wake / Tab Focus Handler for Instant Refresh on phone screen unlock
+    const handleVisibilitySync = async () => {
+      if (document.visibilityState === 'visible') {
+        try {
+          const remote = await fetchSupabaseData(supabaseConfig, classRoom.id);
+          if (remote.hasRemoteData) {
+            if (remote.students && remote.students.length > 0) setStudents(remote.students);
+            if (remote.assignments && remote.assignments.length > 0) setAssignments(remote.assignments);
+            if (remote.submissionsMap && Object.keys(remote.submissionsMap).length > 0) {
+              setSubmissionsMap(prev => ({ ...prev, ...remote.submissionsMap }));
+            }
+          }
+        } catch (e) {
+          // silent
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilitySync);
+    window.addEventListener('focus', handleVisibilitySync);
 
     return () => {
       if (channel && client) {
         client.removeChannel(channel);
       }
       clearInterval(supabasePollInterval);
+      document.removeEventListener('visibilitychange', handleVisibilitySync);
+      window.removeEventListener('focus', handleVisibilitySync);
     };
   }, [supabaseConfig, classRoom.id, showToast]);
 
