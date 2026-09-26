@@ -109,6 +109,17 @@ export const AssignmentHeader: React.FC<AssignmentHeaderProps> = ({
                 <span>{assignment.dueDate} 마감</span>
               </span>
             )}
+            {assignment.targetType === 'custom' ? (
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-[#FAF3EB] text-[#8C4A1A] border border-[#BC6C25]/40 flex items-center gap-1">
+                <Users className="w-3 h-3 text-[#BC6C25]" />
+                <span>일부 대상 ({totalStudents}명)</span>
+              </span>
+            ) : (
+              <span className="text-[11px] font-medium text-[#7D7568] flex items-center gap-1">
+                <Users className="w-3 h-3" />
+                <span>전체 대상 ({totalStudents}명)</span>
+              </span>
+            )}
             <span className="text-[11px] font-medium text-[#A3B18A] flex items-center gap-0.5">
               <Sparkles className="w-3 h-3" />
               <span>실시간 동기화</span>

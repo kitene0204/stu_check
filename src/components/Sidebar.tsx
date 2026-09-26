@@ -6,12 +6,13 @@ import {
   Package, 
   Award, 
   Clock, 
-  CheckCircle2,
-  AlertCircle,
-  Trash2,
-  X,
-  Users,
-  Pencil
+  CheckCircle2, 
+  AlertCircle, 
+  Trash2, 
+  X, 
+  Users, 
+  Pencil,
+  GripVertical
 } from 'lucide-react';
 import { Assignment, AssignmentCategory, Student, SubmissionMap } from '../types';
 
@@ -23,6 +24,7 @@ interface SidebarProps {
   onOpenEditModal?: (assignment: Assignment) => void;
   onDeleteAssignment: (id: string, title: string) => void;
   onOpenRosterModal?: () => void;
+  onReorderAssignments?: (newAssignments: Assignment[]) => void;
   students: Student[];
   submissionsMap: SubmissionMap;
   isMobileOpen?: boolean;
@@ -37,12 +39,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenEditModal,
   onDeleteAssignment,
   onOpenRosterModal,
+  onReorderAssignments,
   students,
   submissionsMap,
   isMobileOpen = false,
   onCloseMobile,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('전체');
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [dropPosition, setDropPosition] = useState<'above' | 'below'>('above');
 
   const categories = ['전체', '과제', '가정통신문', '준비물', '수행평가'];
 
@@ -50,6 +56,63 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (selectedCategory === '전체') return true;
     return asg.category === selectedCategory;
   });
+
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+    setDraggedId(id);
+  };
+
+  const handleDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    if (id === draggedId) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const isAbove = e.clientY < rect.top + rect.height / 2;
+    setDropTargetId(id);
+    setDropPosition(isAbove ? 'above' : 'below');
+  };
+
+  const handleDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (!draggedId || draggedId === targetId) {
+      setDraggedId(null);
+      setDropTargetId(null);
+      return;
+    }
+
+    const fromIndex = assignments.findIndex(a => a.id === draggedId);
+    if (fromIndex < 0) {
+      setDraggedId(null);
+      setDropTargetId(null);
+      return;
+    }
+
+    const reordered = [...assignments];
+    const [movedItem] = reordered.splice(fromIndex, 1);
+    let toIndex = reordered.findIndex(a => a.id === targetId);
+    if (toIndex < 0) {
+      setDraggedId(null);
+      setDropTargetId(null);
+      return;
+    }
+
+    if (dropPosition === 'below') {
+      toIndex += 1;
+    }
+    reordered.splice(toIndex, 0, movedItem);
+
+    setDraggedId(null);
+    setDropTargetId(null);
+
+    if (onReorderAssignments) {
+      onReorderAssignments(reordered);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedId(null);
+    setDropTargetId(null);
+  };
 
   // Calculate stats for current active assignment or overall
   const activeSubmissions = activeAssignmentId ? (submissionsMap[activeAssignmentId] || {}) : {};
@@ -166,25 +229,54 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ) : (
             filteredAssignments.map(asg => {
               const isActive = asg.id === activeAssignmentId;
+              const asgTargetStudents = (asg.targetType === 'custom' && Array.isArray(asg.targetStudentIds) && asg.targetStudentIds.length > 0)
+                ? students.filter(s => asg.targetStudentIds!.includes(s.id))
+                : students;
+              const totalAsgStudents = asgTargetStudents.length;
               const asgSubs = submissionsMap[asg.id] || {};
-              const currentSubmitted = (Object.values(asgSubs) as ({ status: string } | undefined)[]).filter(s => s?.status === 'submitted').length;
-              const isAllDone = students.length > 0 && currentSubmitted >= students.length;
+              const currentSubmitted = asgTargetStudents.filter(s => asgSubs[s.id]?.status === 'submitted').length;
+              const isAllDone = totalAsgStudents > 0 && currentSubmitted >= totalAsgStudents;
+
+              const isBeingDragged = draggedId === asg.id;
+              const isDropTarget = dropTargetId === asg.id;
 
               return (
                 <div
                   key={asg.id}
+                  draggable={true}
+                  onDragStart={(e) => handleDragStart(e, asg.id)}
+                  onDragOver={(e) => handleDragOver(e, asg.id)}
+                  onDrop={(e) => handleDrop(e, asg.id)}
+                  onDragEnd={handleDragEnd}
                   onClick={() => {
                     onSelectAssignment(asg.id);
                     if (onCloseMobile) onCloseMobile();
                   }}
-                  className={`group/item px-3.5 py-2.5 rounded-xl border transition-all cursor-pointer flex flex-col gap-1 relative ${
+                  className={`group/item px-2.5 py-2.5 rounded-xl border transition-all cursor-pointer flex flex-col gap-1 relative ${
+                    isBeingDragged ? 'opacity-30 scale-[0.98] border-dashed border-[#BC6C25]' : ''
+                  } ${
+                    isDropTarget
+                      ? dropPosition === 'above'
+                        ? 'border-t-2 border-t-[#BC6C25] bg-[#FAF3EB]/50'
+                        : 'border-b-2 border-b-[#BC6C25] bg-[#FAF3EB]/50'
+                      : ''
+                  } ${
                     isActive
                       ? 'bg-white shadow-xs border-[#DCD5C8] ring-2 ring-[#A3B18A]/50'
                       : 'bg-white/40 border-transparent hover:bg-white/70 text-[#5D574F]'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 overflow-hidden flex-1">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-1.5 overflow-hidden flex-1">
+                      {/* Drag Handle Grip Icon */}
+                      <span
+                        className="cursor-grab active:cursor-grabbing p-0.5 text-[#C4BCAD] hover:text-[#5D574F] shrink-0"
+                        title="드래그하여 순서 변경"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <GripVertical className="w-3.5 h-3.5" />
+                      </span>
+
                       <div 
                         className={`w-2 h-2 rounded-full shrink-0 ${
                           isAllDone 
@@ -212,7 +304,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             e.stopPropagation();
                             onOpenEditModal(asg);
                           }}
-                          className="p-1 text-[#C4BCAD] hover:text-[#BC6C25] hover:bg-[#FAF3EB] rounded-md transition-colors opacity-80 md:opacity-0 md:group-hover/item:opacity-100"
+                          className="p-1 text-[#C4BCAD] hover:text-[#BC6C25] hover:bg-[#FAF3EB] rounded-md transition-colors opacity-80 md:opacity-0 md:group-hover/item:opacity-100 cursor-pointer"
                           title={`'${asg.title}' 이름 및 정보 수정`}
                         >
                           <Pencil className="w-3.5 h-3.5" />
@@ -223,7 +315,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <button
                         type="button"
                         onClick={(e) => handleDelete(e, asg.id, asg.title)}
-                        className="p-1 text-[#C4BCAD] hover:text-[#C53030] hover:bg-red-50 rounded-md transition-colors opacity-80 md:opacity-0 md:group-hover/item:opacity-100"
+                        className="p-1 text-[#C4BCAD] hover:text-[#C53030] hover:bg-red-50 rounded-md transition-colors opacity-80 md:opacity-0 md:group-hover/item:opacity-100 cursor-pointer"
                         title={`'${asg.title}' 과제 삭제`}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -231,13 +323,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between text-[10px] text-[#A89F91] pl-4">
+                  <div className="flex items-center justify-between text-[10px] text-[#A89F91] pl-5">
                     <span className="flex items-center gap-1">
                       {getCategoryIcon(asg.category)}
                       <span>{asg.category}</span>
+                      {asg.targetType === 'custom' && (
+                        <span className="px-1 py-0.2 bg-[#FAF3EB] text-[#8C4A1A] font-bold rounded text-[9px] border border-[#BC6C25]/30">
+                          일부
+                        </span>
+                      )}
                     </span>
                     <span className={`font-semibold ${isAllDone ? 'text-[#A3B18A]' : 'text-[#5D574F]'}`}>
-                      {currentSubmitted}/{students.length}명
+                      {currentSubmitted}/{totalAsgStudents}명
                     </span>
                   </div>
                 </div>

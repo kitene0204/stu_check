@@ -603,24 +603,34 @@ export default function App() {
     }
   }, [supabaseConfig, sheetsConfig, classRoom, activeAssignment, students, currentSubmissions, assignments, submissionsMap, showToast]);
 
-  // Calculated stats
-  const totalStudents = students.length;
+  // Target students for active assignment (all students or custom selected subset)
+  const targetStudents = useMemo(() => {
+    if (!activeAssignment) return students;
+    if (activeAssignment.targetType === 'custom' && Array.isArray(activeAssignment.targetStudentIds) && activeAssignment.targetStudentIds.length > 0) {
+      const targetSet = new Set(activeAssignment.targetStudentIds);
+      return students.filter(st => targetSet.has(st.id));
+    }
+    return students;
+  }, [students, activeAssignment]);
+
+  // Calculated stats based on target students
+  const totalStudents = targetStudents.length;
   const submittedCount = useMemo(() => {
-    return (Object.values(currentSubmissions) as ({ status: SubmissionStatus } | undefined)[]).filter(
-      s => s?.status === 'submitted'
+    return targetStudents.filter(
+      st => currentSubmissions[st.id]?.status === 'submitted'
     ).length;
-  }, [currentSubmissions]);
+  }, [targetStudents, currentSubmissions]);
 
   const missingCount = totalStudents - submittedCount;
   const resubmitCount = useMemo(() => {
-    return (Object.values(currentSubmissions) as ({ status: SubmissionStatus } | undefined)[]).filter(
-      s => s?.status === 'resubmit'
+    return targetStudents.filter(
+      st => currentSubmissions[st.id]?.status === 'resubmit'
     ).length;
-  }, [currentSubmissions]);
+  }, [targetStudents, currentSubmissions]);
 
   // Filter students based on filterMode
   const filteredStudents = useMemo(() => {
-    return students.filter(student => {
+    return targetStudents.filter(student => {
       const sub = currentSubmissions[student.id];
       const status = sub?.status || 'pending';
 
@@ -630,7 +640,7 @@ export default function App() {
       if (filterMode === 'resubmit') return status === 'resubmit';
       return true;
     });
-  }, [students, currentSubmissions, filterMode]);
+  }, [targetStudents, currentSubmissions, filterMode]);
 
   // Handlers
   const handleUpdateClassRoom = (updated: ClassRoom) => {
@@ -724,6 +734,26 @@ export default function App() {
       supabaseConfig,
       sheetsConfig,
     });
+  };
+
+  const handleReorderAssignments = (newAssignments: Assignment[]) => {
+    setAssignments(newAssignments);
+    saveAssignments(newAssignments);
+
+    if (supabaseConfig.isEnabled && supabaseConfig.url) {
+      syncAssignmentsToSupabase(supabaseConfig, classRoom.id, newAssignments);
+    }
+
+    saveServerStoreData({
+      classRoom,
+      students,
+      assignments: newAssignments,
+      submissionsMap,
+      supabaseConfig,
+      sheetsConfig,
+    });
+
+    showToast('↕️ 과제 순서가 변경되었습니다.');
   };
 
   const handleToggleStatus = (studentId: string) => {
@@ -825,14 +855,14 @@ export default function App() {
   };
 
   const handleCheckAll = () => {
-    if (!activeAssignment?.id || students.length === 0) return;
+    if (!activeAssignment?.id || targetStudents.length === 0) return;
 
     const asgId = activeAssignment.id;
     const nowIso = new Date().toISOString();
-    const updatedCurrentAsg: Record<string, SubmissionItem> = {};
+    const updatedCurrentAsg: Record<string, SubmissionItem> = { ...currentSubmissions };
     const supabasePayload: { studentId: string; status: SubmissionStatus; note?: string; updatedAt: string }[] = [];
 
-    students.forEach(student => {
+    targetStudents.forEach(student => {
       const existing = currentSubmissions[student.id];
       const subItem: SubmissionItem = {
         status: 'submitted',
@@ -870,7 +900,7 @@ export default function App() {
       console.error(e);
     }
 
-    showToast('✨ 전체 학생이 제출 완료 처리되었습니다.');
+    showToast(`✨ 대상 학생(${targetStudents.length}명) 전체가 제출 완료 처리되었습니다.`);
   };
 
   const handleSaveSupabaseConfig = async (cfg: SupabaseConfig) => {
@@ -983,6 +1013,7 @@ export default function App() {
           onOpenEditModal={handleOpenEditModal}
           onDeleteAssignment={handleDeleteAssignment}
           onOpenRosterModal={() => setIsRosterModalOpen(true)}
+          onReorderAssignments={handleReorderAssignments}
           students={students}
           submissionsMap={submissionsMap}
           isMobileOpen={isMobileSidebarOpen}
@@ -1101,7 +1132,7 @@ export default function App() {
         isOpen={isNoticeModalOpen}
         onClose={() => setIsNoticeModalOpen(false)}
         assignment={activeAssignment}
-        students={students}
+        students={targetStudents}
         submissions={currentSubmissions}
         onShowToast={showToast}
       />
@@ -1119,6 +1150,7 @@ export default function App() {
         isOpen={isNewAssignmentModalOpen}
         onClose={() => setIsNewAssignmentModalOpen(false)}
         classId={classRoom.id}
+        students={students}
         onAddAssignment={handleAddAssignment}
         onShowToast={showToast}
       />
@@ -1130,6 +1162,7 @@ export default function App() {
           setEditingAssignment(null);
         }}
         assignment={editingAssignment}
+        students={students}
         onUpdateAssignment={handleUpdateAssignment}
         onDeleteAssignment={handleDeleteAssignment}
         onShowToast={showToast}

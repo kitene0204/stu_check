@@ -27,6 +27,8 @@ export interface Assignment {
   targetCount?: number;
   isArchived?: boolean;
   createdAt: string;
+  targetType?: 'all' | 'custom';
+  targetStudentIds?: string[];
 }
 
 export interface SubmissionItem {

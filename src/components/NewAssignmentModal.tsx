@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { X, Plus, BookOpen, FileText, Package, Award, Sparkles } from 'lucide-react';
-import { Assignment, AssignmentCategory } from '../types';
+import { Assignment, AssignmentCategory, Student } from '../types';
+import { StudentTargetSelector } from './StudentTargetSelector';
 
 interface NewAssignmentModalProps {
   isOpen: boolean;
   onClose: () => void;
   classId: string;
+  students: Student[];
   onAddAssignment: (asg: Assignment) => void;
   onShowToast: (msg: string) => void;
 }
@@ -14,6 +16,7 @@ export const NewAssignmentModal: React.FC<NewAssignmentModalProps> = ({
   isOpen,
   onClose,
   classId,
+  students,
   onAddAssignment,
   onShowToast,
 }) => {
@@ -24,6 +27,8 @@ export const NewAssignmentModal: React.FC<NewAssignmentModalProps> = ({
     return today.toISOString().split('T')[0];
   });
   const [description, setDescription] = useState('');
+  const [targetType, setTargetType] = useState<'all' | 'custom'>('all');
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
 
   if (!isOpen) return null;
 
@@ -31,6 +36,11 @@ export const NewAssignmentModal: React.FC<NewAssignmentModalProps> = ({
     e.preventDefault();
     if (!title.trim()) {
       onShowToast('⚠️ 과제 또는 제출물 제목을 입력해 주세요.');
+      return;
+    }
+
+    if (targetType === 'custom' && selectedStudentIds.length === 0) {
+      onShowToast('⚠️ 제출 대상 학생을 1명 이상 선택해 주세요.');
       return;
     }
 
@@ -42,12 +52,16 @@ export const NewAssignmentModal: React.FC<NewAssignmentModalProps> = ({
       dueDate,
       description: description.trim(),
       createdAt: new Date().toISOString(),
+      targetType,
+      targetStudentIds: targetType === 'custom' ? selectedStudentIds : undefined,
     };
 
     onAddAssignment(newAsg);
     onShowToast(`✨ 새 제출물 항목 '${newAsg.title}'이(가) 등록되었습니다.`);
     setTitle('');
     setDescription('');
+    setTargetType('all');
+    setSelectedStudentIds([]);
     onClose();
   };
 
@@ -61,7 +75,7 @@ export const NewAssignmentModal: React.FC<NewAssignmentModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-      <div className="bg-[#FAF9F6] border border-[#DCD5C8] rounded-2xl w-full max-w-lg shadow-xl overflow-hidden flex flex-col">
+      <div className="bg-[#FAF9F6] border border-[#DCD5C8] rounded-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto shadow-xl flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 bg-[#EAE5D8] border-b border-[#DCD5C8]">
           <div className="flex items-center gap-2 text-[#3D3A35]">
@@ -142,13 +156,22 @@ export const NewAssignmentModal: React.FC<NewAssignmentModalProps> = ({
             </div>
           </div>
 
+          {/* Target Student Selection */}
+          <StudentTargetSelector
+            students={students}
+            targetType={targetType}
+            onChangeTargetType={setTargetType}
+            selectedStudentIds={selectedStudentIds}
+            onChangeSelectedStudentIds={setSelectedStudentIds}
+          />
+
           <div>
             <label className="text-xs font-bold text-[#5D574F] block mb-1">상세 안내 / 메모 (선택)</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="학생들에게 안내할 제출 분량, 주의사항 또는 준비 요령"
-              rows={3}
+              rows={2}
               className="w-full p-3 bg-white border border-[#DCD5C8] rounded-xl text-xs text-[#3D3A35] focus:outline-[#A3B18A]"
             />
           </div>

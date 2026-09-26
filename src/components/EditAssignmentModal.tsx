@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Pencil, BookOpen, FileText, Package, Award, Calendar, Trash2, Check } from 'lucide-react';
-import { Assignment, AssignmentCategory } from '../types';
+import { Assignment, AssignmentCategory, Student } from '../types';
+import { StudentTargetSelector } from './StudentTargetSelector';
 
 interface EditAssignmentModalProps {
   isOpen: boolean;
   onClose: () => void;
   assignment: Assignment | null;
+  students: Student[];
   onUpdateAssignment: (updated: Assignment) => void;
   onDeleteAssignment?: (id: string, title: string) => void;
   onShowToast: (msg: string) => void;
@@ -15,6 +17,7 @@ export const EditAssignmentModal: React.FC<EditAssignmentModalProps> = ({
   isOpen,
   onClose,
   assignment,
+  students,
   onUpdateAssignment,
   onDeleteAssignment,
   onShowToast,
@@ -23,6 +26,8 @@ export const EditAssignmentModal: React.FC<EditAssignmentModalProps> = ({
   const [category, setCategory] = useState<AssignmentCategory>('과제');
   const [dueDate, setDueDate] = useState('');
   const [description, setDescription] = useState('');
+  const [targetType, setTargetType] = useState<'all' | 'custom'>('all');
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -31,6 +36,12 @@ export const EditAssignmentModal: React.FC<EditAssignmentModalProps> = ({
       setCategory(assignment.category || '과제');
       setDueDate(assignment.dueDate || '');
       setDescription(assignment.description || '');
+      setTargetType(assignment.targetType || 'all');
+      setSelectedStudentIds(
+        assignment.targetStudentIds && assignment.targetStudentIds.length > 0
+          ? assignment.targetStudentIds
+          : students.map(s => s.id)
+      );
 
       // Automatically focus and select the title input so user can instantly retype
       setTimeout(() => {
@@ -40,7 +51,7 @@ export const EditAssignmentModal: React.FC<EditAssignmentModalProps> = ({
         }
       }, 50);
     }
-  }, [assignment, isOpen]);
+  }, [assignment, isOpen, students]);
 
   if (!isOpen || !assignment) return null;
 
@@ -52,16 +63,23 @@ export const EditAssignmentModal: React.FC<EditAssignmentModalProps> = ({
       return;
     }
 
+    if (targetType === 'custom' && selectedStudentIds.length === 0) {
+      onShowToast('⚠️ 제출 대상 학생을 1명 이상 선택해 주세요.');
+      return;
+    }
+
     const updatedAsg: Assignment = {
       ...assignment,
       title: trimmedTitle,
       category,
       dueDate,
       description: description.trim(),
+      targetType,
+      targetStudentIds: targetType === 'custom' ? selectedStudentIds : undefined,
     };
 
     onUpdateAssignment(updatedAsg);
-    onShowToast(`✨ 과제 이름이 '${trimmedTitle}'(으)로 변경되었습니다.`);
+    onShowToast(`✨ 과제 '${trimmedTitle}' 정보가 수정되었습니다.`);
     onClose();
   };
 
@@ -81,7 +99,7 @@ export const EditAssignmentModal: React.FC<EditAssignmentModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-      <div className="bg-[#FAF9F6] border border-[#DCD5C8] rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col">
+      <div className="bg-[#FAF9F6] border border-[#DCD5C8] rounded-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto shadow-2xl flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 bg-[#EAE5D8] border-b border-[#DCD5C8]">
           <div className="flex items-center gap-2 text-[#3D3A35]">
@@ -176,6 +194,15 @@ export const EditAssignmentModal: React.FC<EditAssignmentModalProps> = ({
               />
             </div>
           </div>
+
+          {/* Target Student Selection */}
+          <StudentTargetSelector
+            students={students}
+            targetType={targetType}
+            onChangeTargetType={setTargetType}
+            selectedStudentIds={selectedStudentIds}
+            onChangeSelectedStudentIds={setSelectedStudentIds}
+          />
 
           <div>
             <label className="text-xs font-bold text-[#5D574F] block mb-1">상세 안내 / 메모 (선택)</label>
