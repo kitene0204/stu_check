@@ -1,24 +1,24 @@
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { Student, Assignment, SubmissionStatus, SupabaseConfig, SubmissionMap, ClassRoom } from '../types';
 
+// ============================================================================
+// [통합 portal 프로젝트 설정] 무조건 이 주소와 키를 사용하여 연결하도록 강제 설정
+// ============================================================================
+const PORTAL_URL = 'https://lqajnsqoovngfgabalkj.supabase.co';
+const PORTAL_ANON_KEY = 'sb_publishable_DcAlnHgLYSd92ICS66z3RA_DvrzyPhX';
+
 let supabaseClient: SupabaseClient | null = null;
-let currentConfigKey = '';
 
-export const initSupabase = (config: SupabaseConfig): SupabaseClient | null => {
-  if (!config || !config.isEnabled || !config.url || !config.anonKey) {
-    return null;
-  }
-
-  const key = `${config.url.trim()}:::${config.anonKey.trim()}`;
-  if (supabaseClient && currentConfigKey === key) {
+export const initSupabase = (config?: SupabaseConfig): SupabaseClient | null => {
+  // 기존 로컬스토리지에 저장된 옛날 주소(config)가 들어오더라도 무시하고 portal로 연결합니다.
+  if (supabaseClient) {
     return supabaseClient;
   }
 
   try {
-    supabaseClient = createClient(config.url.trim(), config.anonKey.trim(), {
+    supabaseClient = createClient(PORTAL_URL, PORTAL_ANON_KEY, {
       auth: { persistSession: false },
     });
-    currentConfigKey = key;
     return supabaseClient;
   } catch (err) {
     console.error('Failed to create Supabase client:', err);
@@ -27,11 +27,7 @@ export const initSupabase = (config: SupabaseConfig): SupabaseClient | null => {
 };
 
 /**
- * Fetch all remote class data from Supabase:
- * 1. class_metadata (contains full students array & class info if configured)
- * 2. class_students / participants (if individual rows exist)
- * 3. class_submissions (submission map)
- * 4. class_assignments (if assignments exist)
+ * Fetch all remote class data from Supabase
  */
 export const fetchSupabaseData = async (
   config: SupabaseConfig,
