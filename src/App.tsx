@@ -29,6 +29,7 @@ import { SupabaseModal } from './components/SupabaseModal';
 import { PrintModal } from './components/PrintModal';
 import { StudentDetailModal } from './components/StudentDetailModal';
 import { AppSettingsModal } from './components/AppSettingsModal';
+import { EditAssignmentModal } from './components/EditAssignmentModal';
 import { Toast } from './components/Toast';
 
 import {
@@ -88,6 +89,8 @@ export default function App() {
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isEditAssignmentModalOpen, setIsEditAssignmentModalOpen] = useState(false);
+  const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
   
   // Student detail modal
   const [selectedStudentForDetail, setSelectedStudentForDetail] = useState<Student | null>(null);
@@ -691,7 +694,36 @@ export default function App() {
       syncAssignmentsToSupabase(supabaseConfig, classRoom.id, updated);
     }
 
+    if (editingAssignment?.id === id) {
+      setIsEditAssignmentModalOpen(false);
+      setEditingAssignment(null);
+    }
+
     showToast(`🗑️ '${title}' 과제가 삭제되었습니다.`);
+  };
+
+  const handleOpenEditModal = (asg: Assignment) => {
+    setEditingAssignment(asg);
+    setIsEditAssignmentModalOpen(true);
+  };
+
+  const handleUpdateAssignment = (updatedAsg: Assignment) => {
+    const updated = assignments.map(a => a.id === updatedAsg.id ? updatedAsg : a);
+    setAssignments(updated);
+    saveAssignments(updated);
+
+    if (supabaseConfig.isEnabled && supabaseConfig.url) {
+      syncAssignmentsToSupabase(supabaseConfig, classRoom.id, updated);
+    }
+
+    saveServerStoreData({
+      classRoom,
+      students,
+      assignments: updated,
+      submissionsMap,
+      supabaseConfig,
+      sheetsConfig,
+    });
   };
 
   const handleToggleStatus = (studentId: string) => {
@@ -948,6 +980,7 @@ export default function App() {
           activeAssignmentId={activeAssignment?.id || null}
           onSelectAssignment={(id) => setActiveAssignmentId(id)}
           onOpenNewAssignmentModal={() => setIsNewAssignmentModalOpen(true)}
+          onOpenEditModal={handleOpenEditModal}
           onDeleteAssignment={handleDeleteAssignment}
           onOpenRosterModal={() => setIsRosterModalOpen(true)}
           students={students}
@@ -970,6 +1003,7 @@ export default function App() {
             onOpenSheetsModal={() => setIsSheetsModalOpen(true)}
             onOpenNewAssignmentModal={() => setIsNewAssignmentModalOpen(true)}
             onOpenRosterModal={() => setIsRosterModalOpen(true)}
+            onOpenEditModal={handleOpenEditModal}
             onDeleteAssignment={handleDeleteAssignment}
             totalStudents={totalStudents}
             submittedCount={submittedCount}
@@ -1084,7 +1118,21 @@ export default function App() {
       <NewAssignmentModal
         isOpen={isNewAssignmentModalOpen}
         onClose={() => setIsNewAssignmentModalOpen(false)}
+        classId={classRoom.id}
         onAddAssignment={handleAddAssignment}
+        onShowToast={showToast}
+      />
+
+      <EditAssignmentModal
+        isOpen={isEditAssignmentModalOpen}
+        onClose={() => {
+          setIsEditAssignmentModalOpen(false);
+          setEditingAssignment(null);
+        }}
+        assignment={editingAssignment}
+        onUpdateAssignment={handleUpdateAssignment}
+        onDeleteAssignment={handleDeleteAssignment}
+        onShowToast={showToast}
       />
 
       <GoogleSheetsModal

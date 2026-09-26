@@ -11,7 +11,8 @@ import {
   Trash2,
   Users,
   PlusCircle,
-  FolderPlus
+  FolderPlus,
+  Pencil
 } from 'lucide-react';
 import { Assignment, ViewMode, FilterMode } from '../types';
 
@@ -26,6 +27,7 @@ interface AssignmentHeaderProps {
   onOpenSheetsModal: () => void;
   onOpenNewAssignmentModal?: () => void;
   onOpenRosterModal?: () => void;
+  onOpenEditModal?: (assignment: Assignment) => void;
   onDeleteAssignment?: (id: string, title: string) => void;
   totalStudents: number;
   submittedCount: number;
@@ -44,6 +46,7 @@ export const AssignmentHeader: React.FC<AssignmentHeaderProps> = ({
   onOpenSheetsModal,
   onOpenNewAssignmentModal,
   onOpenRosterModal,
+  onOpenEditModal,
   onDeleteAssignment,
   totalStudents,
   submittedCount,
@@ -112,10 +115,27 @@ export const AssignmentHeader: React.FC<AssignmentHeaderProps> = ({
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl md:text-2xl font-serif-kr font-bold text-[#3D3A35] tracking-tight truncate">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 
+              onClick={() => onOpenEditModal && onOpenEditModal(assignment)}
+              className="text-xl md:text-2xl font-serif-kr font-bold text-[#3D3A35] tracking-tight truncate cursor-pointer hover:text-[#8C4A1A] transition-colors"
+              title="클릭하여 과제 이름/정보 수정"
+            >
               {assignment.title}
             </h2>
+
+            {onOpenEditModal && (
+              <button
+                type="button"
+                onClick={() => onOpenEditModal(assignment)}
+                className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-[#FAF3EB] hover:bg-[#F5E6D3] text-[#8C4A1A] border border-[#BC6C25]/30 rounded-lg transition-all shadow-2xs active:scale-95 cursor-pointer shrink-0"
+                title="과제 이름 및 정보 수정"
+              >
+                <Pencil className="w-3.5 h-3.5 text-[#BC6C25]" />
+                <span>이름 수정</span>
+              </button>
+            )}
+
             {onDeleteAssignment && (
               <button
                 type="button"

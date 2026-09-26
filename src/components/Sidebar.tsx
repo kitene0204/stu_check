@@ -10,7 +10,8 @@ import {
   AlertCircle,
   Trash2,
   X,
-  Users
+  Users,
+  Pencil
 } from 'lucide-react';
 import { Assignment, AssignmentCategory, Student, SubmissionMap } from '../types';
 
@@ -19,6 +20,7 @@ interface SidebarProps {
   activeAssignmentId: string | null;
   onSelectAssignment: (id: string) => void;
   onOpenNewAssignmentModal: () => void;
+  onOpenEditModal?: (assignment: Assignment) => void;
   onDeleteAssignment: (id: string, title: string) => void;
   onOpenRosterModal?: () => void;
   students: Student[];
@@ -32,6 +34,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeAssignmentId,
   onSelectAssignment,
   onOpenNewAssignmentModal,
+  onOpenEditModal,
   onDeleteAssignment,
   onOpenRosterModal,
   students,
@@ -199,6 +202,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <div className="flex items-center gap-1 shrink-0">
                       {isAllDone && (
                         <CheckCircle2 className="w-3.5 h-3.5 text-[#A3B18A]" />
+                      )}
+
+                      {/* Edit Assignment Button */}
+                      {onOpenEditModal && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenEditModal(asg);
+                          }}
+                          className="p-1 text-[#C4BCAD] hover:text-[#BC6C25] hover:bg-[#FAF3EB] rounded-md transition-colors opacity-80 md:opacity-0 md:group-hover/item:opacity-100"
+                          title={`'${asg.title}' 이름 및 정보 수정`}
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
                       )}
                       
                       {/* Delete Assignment Button */}
