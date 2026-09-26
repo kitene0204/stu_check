@@ -26,7 +26,8 @@ export const EditAssignmentModal: React.FC<EditAssignmentModalProps> = ({
   const [category, setCategory] = useState<AssignmentCategory>('과제');
   const [dueDate, setDueDate] = useState('');
   const [description, setDescription] = useState('');
-  const [targetType, setTargetType] = useState<'all' | 'custom'>('all');
+  const [targetType, setTargetType] = useState<'all' | 'custom' | 'group'>('all');
+  const [targetGroupName, setTargetGroupName] = useState<string>('');
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -37,6 +38,7 @@ export const EditAssignmentModal: React.FC<EditAssignmentModalProps> = ({
       setDueDate(assignment.dueDate || '');
       setDescription(assignment.description || '');
       setTargetType(assignment.targetType || 'all');
+      setTargetGroupName(assignment.targetGroupName || '');
       setSelectedStudentIds(
         assignment.targetStudentIds && assignment.targetStudentIds.length > 0
           ? assignment.targetStudentIds
@@ -63,7 +65,7 @@ export const EditAssignmentModal: React.FC<EditAssignmentModalProps> = ({
       return;
     }
 
-    if (targetType === 'custom' && selectedStudentIds.length === 0) {
+    if ((targetType === 'custom' || targetType === 'group') && selectedStudentIds.length === 0) {
       onShowToast('⚠️ 제출 대상 학생을 1명 이상 선택해 주세요.');
       return;
     }
@@ -75,7 +77,8 @@ export const EditAssignmentModal: React.FC<EditAssignmentModalProps> = ({
       dueDate,
       description: description.trim(),
       targetType,
-      targetStudentIds: targetType === 'custom' ? selectedStudentIds : undefined,
+      targetGroupName: targetType === 'group' ? targetGroupName : undefined,
+      targetStudentIds: targetType === 'all' ? undefined : selectedStudentIds,
     };
 
     onUpdateAssignment(updatedAsg);
@@ -202,6 +205,8 @@ export const EditAssignmentModal: React.FC<EditAssignmentModalProps> = ({
             onChangeTargetType={setTargetType}
             selectedStudentIds={selectedStudentIds}
             onChangeSelectedStudentIds={setSelectedStudentIds}
+            targetGroupName={targetGroupName}
+            onChangeTargetGroupName={setTargetGroupName}
           />
 
           <div>

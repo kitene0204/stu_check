@@ -1,13 +1,15 @@
 import React, { useState, useMemo } from 'react';
-import { Users, CheckCircle2, Circle, Search, X, Check, XCircle, CheckSquare } from 'lucide-react';
+import { Users, CheckCircle2, Circle, Search, X, Check, XCircle, CheckSquare, FolderPlus } from 'lucide-react';
 import { Student } from '../types';
 
 interface StudentTargetSelectorProps {
   students: Student[];
-  targetType: 'all' | 'custom';
-  onChangeTargetType: (type: 'all' | 'custom') => void;
+  targetType: 'all' | 'custom' | 'group';
+  onChangeTargetType: (type: 'all' | 'custom' | 'group') => void;
   selectedStudentIds: string[];
   onChangeSelectedStudentIds: (ids: string[]) => void;
+  targetGroupName?: string;
+  onChangeTargetGroupName?: (groupName: string) => void;
 }
 
 export const StudentTargetSelector: React.FC<StudentTargetSelectorProps> = ({
@@ -16,16 +18,19 @@ export const StudentTargetSelector: React.FC<StudentTargetSelectorProps> = ({
   onChangeTargetType,
   selectedStudentIds,
   onChangeSelectedStudentIds,
+  targetGroupName,
+  onChangeTargetGroupName,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Extract distinct groups in class
-  const availableGroups = useMemo(() => {
-    const groups = new Set<number>();
+  // Extract distinct groups/classes in roster
+  const availableGroupNames = useMemo(() => {
+    const groups = new Set<string>();
     students.forEach(s => {
-      if (s.groupNumber) groups.add(s.groupNumber);
+      const g = s.groupName?.trim() || (s.groupNumber ? `${s.groupNumber}모둠` : '1모둠');
+      groups.add(g);
     });
-    return Array.from(groups).sort((a, b) => a - b);
+    return Array.from(groups).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   }, [students]);
 
   // Filter students based on search
@@ -35,6 +40,7 @@ export const StudentTargetSelector: React.FC<StudentTargetSelectorProps> = ({
     return students.filter(s => 
       s.name.toLowerCase().includes(query) ||
       String(s.number).includes(query) ||
+      (s.groupName && s.groupName.toLowerCase().includes(query)) ||
       (s.groupNumber && `${s.groupNumber}모둠`.includes(query))
     );
   }, [students, searchQuery]);
@@ -63,9 +69,8 @@ export const StudentTargetSelector: React.FC<StudentTargetSelectorProps> = ({
     onChangeSelectedStudentIds(students.filter(s => s.number % 2 === 0).map(s => s.id));
   };
 
-  const handleSelectGroup = (groupNum: number) => {
-    const groupStudentIds = students.filter(s => s.groupNumber === groupNum).map(s => s.id);
-    // If all in group are already selected, toggle off; otherwise add them all
+  const handleSelectGroup = (gName: string) => {
+    const groupStudentIds = students.filter(s => (s.groupName || `${s.groupNumber || 1}모둠`) === gName).map(s => s.id);
     const allSelected = groupStudentIds.every(id => selectedStudentIds.includes(id));
     if (allSelected) {
       onChangeSelectedStudentIds(selectedStudentIds.filter(id => !groupStudentIds.includes(id)));
@@ -85,15 +90,21 @@ export const StudentTargetSelector: React.FC<StudentTargetSelectorProps> = ({
         <span className="text-[11px] font-semibold text-[#8C4A1A]">
           {targetType === 'all'
             ? `전체 ${students.length}명 대상`
-            : `선택 ${selectedStudentIds.length}명 / 전체 ${students.length}명`}
+            : targetType === 'group'
+              ? `[${targetGroupName || '선택 그룹'}] ${selectedStudentIds.length}명 대상`
+              : `선택 ${selectedStudentIds.length}명 / 전체 ${students.length}명`}
         </span>
       </div>
 
       {/* Target Type Toggle */}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <button
           type="button"
-          onClick={() => onChangeTargetType('all')}
+          onClick={() => {
+            onChangeTargetType('all');
+            if (onChangeTargetGroupName) onChangeTargetGroupName('');
+            onChangeSelectedStudentIds(students.map(s => s.id));
+          }}
           className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer border ${
             targetType === 'all'
               ? 'bg-[#3D3A35] text-white border-[#3D3A35] shadow-xs'
@@ -101,7 +112,28 @@ export const StudentTargetSelector: React.FC<StudentTargetSelectorProps> = ({
           }`}
         >
           <Users className="w-3.5 h-3.5" />
-          <span>우리반 전체 학생 ({students.length}명)</span>
+          <span>우리반 전체 ({students.length}명)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            onChangeTargetType('group');
+            const defaultGroup = targetGroupName || availableGroupNames[0] || '1반';
+            if (onChangeTargetGroupName) onChangeTargetGroupName(defaultGroup);
+            const groupStudentIds = students
+              .filter(s => (s.groupName || `${s.groupNumber || 1}모둠`) === defaultGroup)
+              .map(s => s.id);
+            onChangeSelectedStudentIds(groupStudentIds);
+          }}
+          className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer border ${
+            targetType === 'group'
+              ? 'bg-[#2D6A4F] text-white border-[#2D6A4F] shadow-xs'
+              : 'bg-white text-[#5D574F] border-[#DCD5C8] hover:bg-[#F2EDE4]'
+          }`}
+        >
+          <FolderPlus className="w-3.5 h-3.5" />
+          <span>특정 그룹/반 지정</span>
         </button>
 
         <button
@@ -109,7 +141,6 @@ export const StudentTargetSelector: React.FC<StudentTargetSelectorProps> = ({
           onClick={() => {
             onChangeTargetType('custom');
             if (selectedStudentIds.length === 0) {
-              // Default to all selected for easy unchecking
               onChangeSelectedStudentIds(students.map(s => s.id));
             }
           }}
@@ -120,9 +151,87 @@ export const StudentTargetSelector: React.FC<StudentTargetSelectorProps> = ({
           }`}
         >
           <CheckCircle2 className="w-3.5 h-3.5" />
-          <span>일부 학생만 지정 ({selectedStudentIds.length}명)</span>
+          <span>일부 학생만 직접 지정</span>
         </button>
       </div>
+
+      {/* Group Selector Mode */}
+      {targetType === 'group' && (
+        <div className="pt-2 border-t border-[#EEECE6] space-y-3 animate-in fade-in duration-150">
+          <div className="p-3 bg-[#EBF5EE] border border-[#A3B18A] rounded-xl space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-[#2D6A4F] flex items-center gap-1.5">
+                <FolderPlus className="w-4 h-4" />
+                <span>과제를 부여할 그룹(반)을 선택하세요:</span>
+              </span>
+              <span className="text-[11px] text-[#3D5A30] font-semibold">
+                선택된 대상: <b>{targetGroupName || '없음'}</b> ({selectedStudentIds.length}명)
+              </span>
+            </div>
+
+            <div className="flex flex-wrap gap-2 pt-1">
+              {availableGroupNames.length === 0 ? (
+                <div className="text-xs text-[#7D7568] py-2">
+                  등록된 그룹이 없습니다. 명단 관리에서 학생별 반/그룹을 설정해주세요.
+                </div>
+              ) : (
+                availableGroupNames.map((gName) => {
+                  const groupCount = students.filter(s => (s.groupName || `${s.groupNumber || 1}모둠`) === gName).length;
+                  const isSelected = targetGroupName === gName;
+                  return (
+                    <button
+                      key={gName}
+                      type="button"
+                      onClick={() => {
+                        if (onChangeTargetGroupName) onChangeTargetGroupName(gName);
+                        const gIds = students
+                          .filter(s => (s.groupName || `${s.groupNumber || 1}모둠`) === gName)
+                          .map(s => s.id);
+                        onChangeSelectedStudentIds(gIds);
+                      }}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5 border active:scale-95 ${
+                        isSelected
+                          ? 'bg-[#2D6A4F] text-white border-[#2D6A4F] ring-2 ring-[#2D6A4F]/30 scale-[1.02]'
+                          : 'bg-white hover:bg-[#F2EDE4] text-[#3D3A35] border-[#DCD5C8]'
+                      }`}
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      <span>{gName}</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                        isSelected ? 'bg-white/25 text-white' : 'bg-[#EAE5D8] text-[#5D574F]'
+                      }`}>
+                        {groupCount}명
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Preview of Students in Selected Group */}
+          {targetGroupName && (
+            <div className="p-3 bg-white border border-[#DCD5C8] rounded-xl space-y-1.5">
+              <div className="text-[11px] font-bold text-[#5D574F] flex items-center justify-between">
+                <span>'{targetGroupName}' 소속 학생 명단 ({selectedStudentIds.length}명):</span>
+                <span className="text-[10px] text-[#8C4A1A]">이 과제는 위 학생들에게만 배정됩니다</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pt-1">
+                {students
+                  .filter(s => (s.groupName || `${s.groupNumber || 1}모둠`) === targetGroupName)
+                  .map(st => (
+                    <span
+                      key={st.id}
+                      className="px-2 py-1 bg-[#FAF9F6] border border-[#DCD5C8] text-[#3D3A35] rounded-lg text-[11px] font-medium"
+                    >
+                      {st.number}번 {st.name}
+                    </span>
+                  ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Custom Student Selector Panel */}
       {targetType === 'custom' && (
@@ -153,7 +262,7 @@ export const StudentTargetSelector: React.FC<StudentTargetSelectorProps> = ({
 
             {/* Quick Filter Buttons (Odd, Even, Groups) */}
             <div className="flex flex-wrap items-center gap-1 text-[11px]">
-              <span className="text-[#8C4A1A] text-[10px] font-semibold mr-0.5">조건 선택:</span>
+              <span className="text-[#8C4A1A] text-[10px] font-semibold mr-0.5">빠른 선택:</span>
               <button
                 type="button"
                 onClick={handleSelectOdd}
@@ -168,14 +277,14 @@ export const StudentTargetSelector: React.FC<StudentTargetSelectorProps> = ({
               >
                 짝수번
               </button>
-              {availableGroups.map(g => (
+              {availableGroupNames.map(gName => (
                 <button
-                  key={g}
+                  key={gName}
                   type="button"
-                  onClick={() => handleSelectGroup(g)}
-                  className="px-2 py-1 bg-white hover:bg-[#F2EDE4] border border-[#DCD5C8] rounded-md text-[#5D574F] font-medium cursor-pointer"
+                  onClick={() => handleSelectGroup(gName)}
+                  className="px-2 py-1 bg-white hover:bg-[#FAF3EB] hover:text-[#8C4A1A] border border-[#DCD5C8] rounded-md text-[#5D574F] font-medium cursor-pointer"
                 >
-                  {g}모둠
+                  {gName}
                 </button>
               ))}
             </div>
@@ -188,7 +297,7 @@ export const StudentTargetSelector: React.FC<StudentTargetSelectorProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="학생 이름 또는 번호 검색..."
+              placeholder="학생 이름, 번호 또는 그룹(반) 검색..."
               className="w-full pl-8 pr-7 py-1.5 bg-white border border-[#DCD5C8] rounded-lg text-xs text-[#3D3A35] placeholder:text-[#A89F91] focus:outline-none focus:ring-1 focus:ring-[#BC6C25]"
             />
             {searchQuery && (
@@ -223,10 +332,15 @@ export const StudentTargetSelector: React.FC<StudentTargetSelectorProps> = ({
                     }`}
                   >
                     <div className="flex items-center gap-1.5 overflow-hidden">
-                      <span className={`text-[10px] px-1 py-0.2 rounded ${isSelected ? 'bg-[#BC6C25] text-white font-bold' : 'bg-gray-100 text-gray-500'}`}>
+                      <span className={`text-[10px] px-1 py-0.2 rounded font-mono ${isSelected ? 'bg-[#BC6C25] text-white font-bold' : 'bg-gray-100 text-gray-500'}`}>
                         {student.number}
                       </span>
                       <span className="truncate">{student.name}</span>
+                      {(student.groupName || student.groupNumber) && (
+                        <span className="text-[9px] px-1 py-0.2 bg-black/5 rounded text-[#7D7568]">
+                          {student.groupName || `${student.groupNumber}모둠`}
+                        </span>
+                      )}
                     </div>
 
                     <div className="shrink-0 ml-1">

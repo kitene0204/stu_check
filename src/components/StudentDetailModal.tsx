@@ -49,8 +49,13 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
         <div className="flex items-center justify-between px-6 py-4 bg-[#EAE5D8] border-b border-[#DCD5C8]">
           <div className="flex items-center gap-2 text-[#3D3A35]">
             <MessageSquare className="w-5 h-5 text-[#A3B18A]" />
-            <h3 className="font-bold text-base">
-              {student.number}번 {student.name} 학생 메모 및 상태
+            <h3 className="font-bold text-base flex items-center gap-1.5">
+              <span>{student.number}번 {student.name}</span>
+              {(student.groupName || student.groupNumber) && (
+                <span className="text-[11px] px-2 py-0.5 rounded-md bg-white border border-[#DCD5C8] text-[#8C4A1A] font-bold">
+                  {student.groupName || `${student.groupNumber}모둠`}
+                </span>
+              )}
             </h3>
           </div>
           <button

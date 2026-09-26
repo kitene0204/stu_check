@@ -27,7 +27,8 @@ export const NewAssignmentModal: React.FC<NewAssignmentModalProps> = ({
     return today.toISOString().split('T')[0];
   });
   const [description, setDescription] = useState('');
-  const [targetType, setTargetType] = useState<'all' | 'custom'>('all');
+  const [targetType, setTargetType] = useState<'all' | 'custom' | 'group'>('all');
+  const [targetGroupName, setTargetGroupName] = useState<string>('');
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
 
   if (!isOpen) return null;
@@ -39,7 +40,7 @@ export const NewAssignmentModal: React.FC<NewAssignmentModalProps> = ({
       return;
     }
 
-    if (targetType === 'custom' && selectedStudentIds.length === 0) {
+    if ((targetType === 'custom' || targetType === 'group') && selectedStudentIds.length === 0) {
       onShowToast('⚠️ 제출 대상 학생을 1명 이상 선택해 주세요.');
       return;
     }
@@ -53,7 +54,8 @@ export const NewAssignmentModal: React.FC<NewAssignmentModalProps> = ({
       description: description.trim(),
       createdAt: new Date().toISOString(),
       targetType,
-      targetStudentIds: targetType === 'custom' ? selectedStudentIds : undefined,
+      targetGroupName: targetType === 'group' ? targetGroupName : undefined,
+      targetStudentIds: targetType === 'all' ? undefined : selectedStudentIds,
     };
 
     onAddAssignment(newAsg);
@@ -61,6 +63,7 @@ export const NewAssignmentModal: React.FC<NewAssignmentModalProps> = ({
     setTitle('');
     setDescription('');
     setTargetType('all');
+    setTargetGroupName('');
     setSelectedStudentIds([]);
     onClose();
   };
@@ -163,6 +166,8 @@ export const NewAssignmentModal: React.FC<NewAssignmentModalProps> = ({
             onChangeTargetType={setTargetType}
             selectedStudentIds={selectedStudentIds}
             onChangeSelectedStudentIds={setSelectedStudentIds}
+            targetGroupName={targetGroupName}
+            onChangeTargetGroupName={setTargetGroupName}
           />
 
           <div>

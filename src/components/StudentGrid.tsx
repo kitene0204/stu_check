@@ -57,15 +57,15 @@ export const StudentGrid: React.FC<StudentGridProps> = ({
                   {formattedNumber}
                 </span>
 
-                {student.groupNumber && (
+                {(student.groupName || student.groupNumber) && (
                   <span
-                    className={`text-[9px] sm:text-[10px] font-semibold px-1 py-0.5 rounded ${
+                    className={`text-[9px] sm:text-[10px] font-semibold px-1.5 py-0.5 rounded ${
                       isSubmitted
                         ? 'bg-white/20 text-white'
                         : 'bg-[#F2EDE4] text-[#8C8375]'
                     }`}
                   >
-                    {student.groupNumber}모둠
+                    {student.groupName || `${student.groupNumber}모둠`}
                   </span>
                 )}
               </div>

@@ -5,7 +5,8 @@ export interface Student {
   number: number;
   name: string;
   gender?: 'M' | 'F';
-  groupNumber?: number; // 모둠 (1~6)
+  groupNumber?: number; // 모둠 (1~10)
+  groupName?: string; // 소속 그룹/반 명칭 (예: "1반", "2반", "1모둠", "A그룹")
   note?: string;
 }
 
@@ -27,7 +28,8 @@ export interface Assignment {
   targetCount?: number;
   isArchived?: boolean;
   createdAt: string;
-  targetType?: 'all' | 'custom';
+  targetType?: 'all' | 'custom' | 'group';
+  targetGroupName?: string; // 대상 그룹/반 명칭 (예: "1반", "2반", "1모둠")
   targetStudentIds?: string[];
 }
 

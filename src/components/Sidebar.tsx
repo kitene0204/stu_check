@@ -229,9 +229,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ) : (
             filteredAssignments.map(asg => {
               const isActive = asg.id === activeAssignmentId;
-              const asgTargetStudents = (asg.targetType === 'custom' && Array.isArray(asg.targetStudentIds) && asg.targetStudentIds.length > 0)
-                ? students.filter(s => asg.targetStudentIds!.includes(s.id))
-                : students;
+              const asgTargetStudents = (asg.targetType === 'group' && asg.targetGroupName)
+                ? students.filter(s => (s.groupName || `${s.groupNumber || 1}모둠`) === asg.targetGroupName)
+                : ((asg.targetType === 'custom' || asg.targetType === 'group') && Array.isArray(asg.targetStudentIds) && asg.targetStudentIds.length > 0)
+                  ? students.filter(s => asg.targetStudentIds!.includes(s.id))
+                  : students;
               const totalAsgStudents = asgTargetStudents.length;
               const asgSubs = submissionsMap[asg.id] || {};
               const currentSubmitted = asgTargetStudents.filter(s => asgSubs[s.id]?.status === 'submitted').length;
@@ -327,11 +329,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <span className="flex items-center gap-1">
                       {getCategoryIcon(asg.category)}
                       <span>{asg.category}</span>
-                      {asg.targetType === 'custom' && (
+                      {asg.targetGroupName ? (
+                        <span className="px-1.5 py-0.2 bg-[#E8F0E4] text-[#2D6A4F] font-bold rounded text-[9px] border border-[#A3B18A] shadow-2xs">
+                          {asg.targetGroupName}
+                        </span>
+                      ) : asg.targetType === 'custom' ? (
                         <span className="px-1 py-0.2 bg-[#FAF3EB] text-[#8C4A1A] font-bold rounded text-[9px] border border-[#BC6C25]/30">
                           일부
                         </span>
-                      )}
+                      ) : null}
                     </span>
                     <span className={`font-semibold ${isAllDone ? 'text-[#A3B18A]' : 'text-[#5D574F]'}`}>
                       {currentSubmitted}/{totalAsgStudents}명

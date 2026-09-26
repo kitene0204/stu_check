@@ -268,9 +268,9 @@ export const saveSheetsConfigToServer = async (config: GoogleSheetsConfig): Prom
 
 /**
  * Parses raw copied table text (from Excel, Google Sheets, or plain tab/comma-separated text)
- * Expected columns: 번호, 이름, 성별(선택), 모둠(선택), 비고(선택)
+ * Expected columns: 번호, 이름, 성별(선택), 모둠/반(선택), 비고(선택)
  */
-export const parseStudentRosterText = (rawText: string): Student[] => {
+export const parseStudentRosterText = (rawText: string, defaultGroupName?: string): Student[] => {
   const lines = rawText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const students: Student[] = [];
 
@@ -299,6 +299,7 @@ export const parseStudentRosterText = (rawText: string): Student[] => {
     let name = '';
     let gender: 'M' | 'F' | undefined = undefined;
     let groupNumber: number | undefined = undefined;
+    let parsedGroupName: string | undefined = defaultGroupName?.trim() || undefined;
     let note = '';
 
     if (!isNaN(num) && parts.length >= 2) {
@@ -307,8 +308,15 @@ export const parseStudentRosterText = (rawText: string): Student[] => {
         if (parts[2] === '남' || parts[2] === 'M' || parts[2] === '남학생') gender = 'M';
         else if (parts[2] === '여' || parts[2] === 'F' || parts[2] === '여학생') gender = 'F';
       }
-      if (parts[3] && !isNaN(parseInt(parts[3], 10))) {
-        groupNumber = parseInt(parts[3], 10);
+      if (parts[3]) {
+        const rawGroup = parts[3];
+        const numMatch = rawGroup.match(/([0-9]+)/);
+        if (numMatch) {
+          groupNumber = parseInt(numMatch[1], 10);
+        }
+        if (!parsedGroupName) {
+          parsedGroupName = rawGroup;
+        }
       }
       if (parts[4]) note = parts[4];
     } else {
@@ -325,12 +333,14 @@ export const parseStudentRosterText = (rawText: string): Student[] => {
     const cleanName = name.replace(/^[0-9\.\)\-\:\s]+/, '').trim();
 
     if (cleanName) {
+      const finalGroupNum = groupNumber || (parsedGroupName ? parseInt(parsedGroupName.replace(/[^0-9]/g, ''), 10) || undefined : undefined);
       students.push({
         id: `st-${Date.now()}-${Math.random().toString(36).substr(2, 5)}-${i}`,
         number: num || currentAutoNumber,
         name: cleanName,
         gender,
-        groupNumber: groupNumber || Math.ceil((num || currentAutoNumber) / 4) || 1,
+        groupNumber: finalGroupNum || Math.ceil((num || currentAutoNumber) / 4) || 1,
+        groupName: parsedGroupName || (finalGroupNum ? `${finalGroupNum}모둠` : undefined),
         note,
       });
       currentAutoNumber = (num || currentAutoNumber) + 1;

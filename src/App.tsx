@@ -704,7 +704,11 @@ export default function App() {
   // Target students for active assignment (all students or custom selected subset)
   const targetStudents = useMemo(() => {
     if (!activeAssignment) return students;
-    if (activeAssignment.targetType === 'custom' && Array.isArray(activeAssignment.targetStudentIds) && activeAssignment.targetStudentIds.length > 0) {
+    if (activeAssignment.targetType === 'group' && activeAssignment.targetGroupName) {
+      const gName = activeAssignment.targetGroupName;
+      return students.filter(st => (st.groupName || `${st.groupNumber || 1}모둠`) === gName);
+    }
+    if ((activeAssignment.targetType === 'custom' || activeAssignment.targetType === 'group') && Array.isArray(activeAssignment.targetStudentIds) && activeAssignment.targetStudentIds.length > 0) {
       const targetSet = new Set(activeAssignment.targetStudentIds);
       return students.filter(st => targetSet.has(st.id));
     }

@@ -15,21 +15,21 @@ export const StudentGroupView: React.FC<StudentGroupViewProps> = ({
   onToggleStatus,
   onOpenStudentDetail,
 }) => {
-  // Group students by groupNumber
-  const groups: Record<number, Student[]> = {};
+  // Group students by groupName or groupNumber
+  const groups: Record<string, Student[]> = {};
 
   students.forEach((student) => {
-    const g = student.groupNumber || 1;
+    const g = student.groupName?.trim() || `${student.groupNumber || 1}모둠`;
     if (!groups[g]) groups[g] = [];
     groups[g].push(student);
   });
 
-  const groupKeys = Object.keys(groups).map(Number).sort((a, b) => a - b);
+  const groupKeys = Object.keys(groups).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pb-12">
-      {groupKeys.map((groupNum) => {
-        const groupStudents = groups[groupNum];
+      {groupKeys.map((groupName) => {
+        const groupStudents = groups[groupName];
         const submittedInGroup = groupStudents.filter(
           st => (submissions[st.id]?.status === 'submitted')
         ).length;
@@ -37,7 +37,7 @@ export const StudentGroupView: React.FC<StudentGroupViewProps> = ({
 
         return (
           <div
-            key={groupNum}
+            key={groupName}
             className="bg-[#F9F8F5] rounded-2xl border border-[#EEECE6] p-4 flex flex-col justify-between shadow-xs"
           >
             <div>
@@ -45,10 +45,10 @@ export const StudentGroupView: React.FC<StudentGroupViewProps> = ({
               <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#EEECE6]">
                 <div className="flex items-center gap-2">
                   <div className="w-7 h-7 rounded-lg bg-[#52794C] text-white flex items-center justify-center text-xs font-bold shadow-xs">
-                    {groupNum}
+                    <Users className="w-3.5 h-3.5" />
                   </div>
                   <h3 className="font-bold text-sm text-[#3D3A35]">
-                    {groupNum}모둠 ({groupStudents.length}명)
+                    {groupName} ({groupStudents.length}명)
                   </h3>
                 </div>
 

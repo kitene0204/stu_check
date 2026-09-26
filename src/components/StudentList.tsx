@@ -23,7 +23,7 @@ export const StudentList: React.FC<StudentListProps> = ({
             <tr>
               <th className="py-3 px-4 w-16 text-center">번호</th>
               <th className="py-3 px-4 w-28">이름</th>
-              <th className="py-3 px-4 w-20 text-center">모둠</th>
+              <th className="py-3 px-4 w-24 text-center">그룹/반</th>
               <th className="py-3 px-4 w-40 text-center">제출 상태</th>
               <th className="py-3 px-4">선생님 메모 / 사유</th>
               <th className="py-3 px-4 w-24 text-right">상세</th>
@@ -55,8 +55,8 @@ export const StudentList: React.FC<StudentListProps> = ({
                     )}
                   </td>
                   <td className="py-3 px-4 text-center">
-                    <span className="px-2 py-0.5 bg-black/5 rounded text-[11px]">
-                      {student.groupNumber ? `${student.groupNumber}모둠` : '-'}
+                    <span className="px-2 py-0.5 bg-black/5 rounded text-[11px] font-semibold text-[#5D574F]">
+                      {student.groupName || (student.groupNumber ? `${student.groupNumber}모둠` : '-')}
                     </span>
                   </td>
                   <td className="py-3 px-4 text-center">
